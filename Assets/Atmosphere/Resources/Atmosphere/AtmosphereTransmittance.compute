@@ -1,0 +1,70 @@
+#pragma kernel CSMain
+
+#include "../../Shaders/AtmosphereCommon.hlsl"
+
+RWTexture2D<float4> _AtmosphereTransmittanceLut;
+
+float _AtmosphereGroundRadiusKm;
+float _AtmosphereTopRadiusKm;
+float3 _AtmosphereRayleighScattering;
+float3 _AtmosphereMieScattering;
+float3 _AtmosphereMieAbsorption;
+float3 _AtmosphereOzoneAbsorption;
+float4 _AtmosphereScaleHeights;
+float4 _AtmosphereOzoneLayer;
+float4 _AtmosphereTransmittanceSize;
+int _AtmosphereTransmittanceSteps;
+
+[numthreads(8, 8, 1)]
+void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+    uint width = (uint)_AtmosphereTransmittanceSize.x;
+    uint height = (uint)_AtmosphereTransmittanceSize.y;
+
+    if (dispatchThreadId.x >= width || dispatchThreadId.y >= height)
+        return;
+
+    float2 uv = (float2(dispatchThreadId.xy) + 0.5) / float2(width, height);
+    float2 transmittanceParameters = UvToTransmittanceParameters(uv, _AtmosphereGroundRadiusKm, _AtmosphereTopRadiusKm);
+    float r = transmittanceParameters.x;
+    float mu = transmittanceParameters.y;
+
+    float sinTheta = sqrt(saturate(1.0 - mu * mu));
+    float3 originKm = float3(0.0, r, 0.0);
+    float3 direction = normalize(float3(sinTheta, mu, 0.0));
+
+    float distanceToTop = RaySphereIntersectFar(originKm, direction, _AtmosphereTopRadiusKm);
+    float distanceToIntegrate = distanceToTop;
+
+    if (distanceToIntegrate <= 0.0)
+    {
+        _AtmosphereTransmittanceLut[dispatchThreadId.xy] = float4(1.0, 1.0, 1.0, 1.0);
+        return;
+    }
+
+    int stepCount = max(1, _AtmosphereTransmittanceSteps);
+    float dt = distanceToIntegrate / stepCount;
+    float3 opticalDepth = 0.0;
+
+    [loop]
+    for (int stepIndex = 0; stepIndex < stepCount; ++stepIndex)
+    {
+        float t = (stepIndex + 0.5) * dt;
+        float3 samplePositionKm = originKm + direction * t;
+        float heightKm = GetAtmosphereHeightKm(samplePositionKm, _AtmosphereGroundRadiusKm);
+
+        opticalDepth += GetExtinction(
+            heightKm,
+            _AtmosphereRayleighScattering,
+            _AtmosphereMieScattering,
+            _AtmosphereMieAbsorption,
+            _AtmosphereOzoneAbsorption,
+            _AtmosphereScaleHeights.x,
+            _AtmosphereScaleHeights.y,
+            _AtmosphereOzoneLayer.x,
+            _AtmosphereOzoneLayer.y) * dt;
+    }
+
+    float3 transmittance = exp(-opticalDepth);
+    _AtmosphereTransmittanceLut[dispatchThreadId.xy] = float4(saturate(transmittance), 1.0);
+}
