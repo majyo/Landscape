@@ -15,5 +15,10 @@ namespace Landscape.Atmosphere
         public static readonly int OzoneLayer = Shader.PropertyToID("_AtmosphereOzoneLayer");
         public static readonly int TransmittanceSize = Shader.PropertyToID("_AtmosphereTransmittanceSize");
         public static readonly int TransmittanceSteps = Shader.PropertyToID("_AtmosphereTransmittanceSteps");
+        public static readonly int MultiScatteringLut = Shader.PropertyToID("_AtmosphereMultiScatteringLut");
+        public static readonly int MultiScatteringSize = Shader.PropertyToID("_AtmosphereMultiScatteringSize");
+        public static readonly int GroundAlbedo = Shader.PropertyToID("_AtmosphereGroundAlbedo");
+        public static readonly int MultiScatteringSphereSamples = Shader.PropertyToID("_AtmosphereMultiScatteringSphereSamples");
+        public static readonly int MultiScatteringRaySteps = Shader.PropertyToID("_AtmosphereMultiScatteringRaySteps");
     }
 }

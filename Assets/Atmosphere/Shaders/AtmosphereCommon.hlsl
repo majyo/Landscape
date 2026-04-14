@@ -2,6 +2,10 @@
 #define LANDSCAPE_ATMOSPHERE_COMMON_INCLUDED
 
 static const float kAtmosphereTransmittanceDistanceScale = 1.05;
+static const float PI = 3.14159265359;
+static const float INV_PI = 0.31830988618;
+static const float INV_FOUR_PI = 0.07957747154;
+static const float FIBONACCI_GOLDEN_RATIO = 1.61803398875;
 
 float RaySphereIntersectNearest(float3 origin, float3 direction, float radius)
 {
@@ -91,6 +95,45 @@ float2 TransmittanceParametersToUv(float radiusKm, float cosTheta, float groundR
     float u = (distanceKm - minDistanceKm) / max(maxDistanceKm - minDistanceKm, 1e-4);
 
     return saturate(float2(u, v));
+}
+
+float3 SampleTransmittanceLut(
+    Texture2D lut,
+    SamplerState lutSampler,
+    float radiusKm,
+    float cosTheta,
+    float groundRadiusKm,
+    float topRadiusKm)
+{
+    float2 uv = TransmittanceParametersToUv(radiusKm, cosTheta, groundRadiusKm, topRadiusKm);
+    return lut.SampleLevel(lutSampler, uv, 0).rgb;
+}
+
+float3 SampleTransmittanceLut(
+    Texture2D lut,
+    SamplerState lutSampler,
+    float3 positionKm,
+    float3 direction,
+    float groundRadiusKm,
+    float topRadiusKm)
+{
+    float radiusKm = length(positionKm);
+    float cosTheta = dot(normalize(positionKm), direction);
+    return SampleTransmittanceLut(lut, lutSampler, radiusKm, cosTheta, groundRadiusKm, topRadiusKm);
+}
+
+float3 GetFibonacciSphereDirection(uint sampleIndex, uint sampleCount)
+{
+    float phi = 2.0 * PI * frac((float)sampleIndex / FIBONACCI_GOLDEN_RATIO);
+    float cosTheta = 1.0 - (2.0 * (float)sampleIndex + 1.0) / (float)sampleCount;
+    float sinTheta = sqrt(saturate(1.0 - cosTheta * cosTheta));
+    return float3(cos(phi) * sinTheta, cosTheta, sin(phi) * sinTheta);
+}
+
+float GetPlanetShadow(float3 samplePositionKm, float3 sunDirection, float groundRadiusKm)
+{
+    float groundHitDistance = RaySphereIntersectNearest(samplePositionKm, sunDirection, groundRadiusKm);
+    return groundHitDistance > 0.0 ? 0.0 : 1.0;
 }
 
 float3 GetExtinction(

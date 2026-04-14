@@ -20,14 +20,19 @@ namespace Landscape.Atmosphere
 
         private AtmosphereLutManager lutManager;
         private bool forceRebuild = true;
+        private bool forceMultiScatteringRebuild = true;
         private GUIStyle overlayLabelStyle;
         private GUIStyle overlayTitleStyle;
 
         public static AtmosphereController Instance => instance;
         public RTHandle TransmittanceHandle => lutManager != null ? lutManager.TransmittanceHandle : null;
+        public RTHandle MultiScatteringHandle => lutManager != null ? lutManager.MultiScatteringHandle : null;
         public RenderTexture TransmittanceTexture => lutManager != null ? lutManager.TransmittanceTexture : null;
-        public ComputeShader TransmittanceComputeShader => lutManager != null ? lutManager.ComputeShader : null;
-        public int TransmittanceKernelIndex => lutManager != null ? lutManager.KernelIndex : -1;
+        public RenderTexture MultiScatteringTexture => lutManager != null ? lutManager.MultiScatteringTexture : null;
+        public ComputeShader TransmittanceComputeShader => lutManager != null ? lutManager.TransmittanceComputeShader : null;
+        public ComputeShader MultiScatteringComputeShader => lutManager != null ? lutManager.MultiScatteringComputeShader : null;
+        public int TransmittanceKernelIndex => lutManager != null ? lutManager.TransmittanceKernelIndex : -1;
+        public int MultiScatteringKernelIndex => lutManager != null ? lutManager.MultiScatteringKernelIndex : -1;
 
         private void Reset()
         {
@@ -49,6 +54,7 @@ namespace Landscape.Atmosphere
             LoadDefaultProfileIfNeeded();
             TryAssignMainLight();
             forceRebuild = true;
+            forceMultiScatteringRebuild = true;
         }
 
         private void OnDisable()
@@ -65,6 +71,7 @@ namespace Landscape.Atmosphere
             LoadDefaultProfileIfNeeded();
             TryAssignMainLight();
             forceRebuild = true;
+            forceMultiScatteringRebuild = true;
         }
 
         public bool TryPrepareForRender(out AtmosphereParameters parameters)
@@ -80,12 +87,26 @@ namespace Landscape.Atmosphere
 
             lutManager ??= new AtmosphereLutManager();
             parameters = AtmosphereParameters.FromProfile(profile);
-            return lutManager.EnsureResources(parameters);
+            return lutManager.EnsureTransmittanceResources(parameters);
+        }
+
+        public bool TryPrepareForMultiScattering(out AtmosphereParameters parameters)
+        {
+            parameters = default;
+            if (!TryPrepareForRender(out parameters))
+                return false;
+
+            return lutManager.EnsureMultiScatteringResources(parameters);
         }
 
         public bool NeedsTransmittanceRebuild(in AtmosphereParameters parameters)
         {
-            return forceRebuild || lutManager == null || lutManager.NeedsRebuild(parameters);
+            return forceRebuild || lutManager == null || lutManager.NeedsTransmittanceRebuild(parameters);
+        }
+
+        public bool NeedsMultiScatteringRebuild(in AtmosphereParameters parameters)
+        {
+            return forceMultiScatteringRebuild || lutManager == null || lutManager.NeedsMultiScatteringRebuild(parameters);
         }
 
         public void RenderTransmittance(CommandBuffer cmd, in AtmosphereParameters parameters)
@@ -94,6 +115,15 @@ namespace Landscape.Atmosphere
             lutManager.RenderTransmittance(cmd, parameters);
             lutManager.BindGlobals(cmd, parameters);
             forceRebuild = false;
+            forceMultiScatteringRebuild = true;
+        }
+
+        public void RenderMultiScattering(CommandBuffer cmd, in AtmosphereParameters parameters)
+        {
+            lutManager ??= new AtmosphereLutManager();
+            lutManager.RenderMultiScattering(cmd, parameters);
+            lutManager.BindGlobals(cmd, parameters);
+            forceMultiScatteringRebuild = false;
         }
 
         public void BindGlobals(CommandBuffer cmd, in AtmosphereParameters parameters)
@@ -110,24 +140,42 @@ namespace Landscape.Atmosphere
                 return;
 
             RenderTexture texture = TransmittanceTexture;
-            if (texture == null)
+            RenderTexture multiScatteringTexture = MultiScatteringTexture;
+            if (texture == null && multiScatteringTexture == null)
                 return;
 
             EnsureOverlayStyles();
 
             float width = Mathf.Max(128.0f, debugOverlaySize.x);
             float height = Mathf.Max(32.0f, debugOverlaySize.y);
-            Rect panelRect = new Rect(16.0f, 16.0f, width + OverlayPaddingLeft + OverlayPaddingRight, height + 44.0f);
+            float blockHeight = height + 24.0f;
+            int blockCount = (texture != null ? 1 : 0) + (multiScatteringTexture != null ? 1 : 0);
+            Rect panelRect = new Rect(16.0f, 16.0f, width + OverlayPaddingLeft + OverlayPaddingRight, blockCount * blockHeight + 20.0f);
+            GUI.Box(panelRect, GUIContent.none);
+
+            float cursorY = panelRect.y + 8.0f;
+            if (texture != null)
+            {
+                DrawOverlayTexture(panelRect.x, ref cursorY, width, height, texture, "Atmosphere Transmittance LUT");
+            }
+
+            if (multiScatteringTexture != null)
+            {
+                DrawOverlayTexture(panelRect.x, ref cursorY, width, height, multiScatteringTexture, "Atmosphere Multi-scattering LUT");
+            }
+        }
+
+        private void DrawOverlayTexture(float panelX, ref float cursorY, float width, float height, RenderTexture texture, string label)
+        {
             Rect textureRect = new Rect(
-                panelRect.x + OverlayPaddingLeft,
-                panelRect.y + 28.0f,
+                panelX + OverlayPaddingLeft,
+                cursorY + 20.0f,
                 width,
                 height);
-
-            GUI.Box(panelRect, GUIContent.none);
-            GUI.Label(new Rect(panelRect.x + 8.0f, panelRect.y + 6.0f, panelRect.width - 16.0f, 20.0f), "Atmosphere Transmittance LUT", overlayTitleStyle);
+            GUI.Label(new Rect(panelX + 8.0f, cursorY, width, 20.0f), label, overlayTitleStyle);
             GUI.DrawTexture(textureRect, texture, ScaleMode.StretchToFill, false);
             GUI.Label(new Rect(textureRect.x, textureRect.yMax + 4.0f, textureRect.width, 18.0f), $"{texture.width}x{texture.height} ARGBHalf", overlayLabelStyle);
+            cursorY = textureRect.yMax + 24.0f;
         }
 
         private void EnsureOverlayStyles()

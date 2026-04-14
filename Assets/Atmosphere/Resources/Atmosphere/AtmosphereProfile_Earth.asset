@@ -25,3 +25,8 @@ MonoBehaviour:
   transmittanceWidth: 256
   transmittanceHeight: 64
   transmittanceSteps: 40
+  groundAlbedo: {x: 0.3, y: 0.3, z: 0.3}
+  multiScatteringWidth: 32
+  multiScatteringHeight: 32
+  multiScatteringSphereSamples: 64
+  multiScatteringRaySteps: 20

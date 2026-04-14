@@ -28,6 +28,13 @@ namespace Landscape.Atmosphere
         [Min(1)] public int transmittanceHeight = 64;
         [Min(1)] public int transmittanceSteps = 40;
 
+        [Header("Multi-scattering LUT")]
+        public Vector3 groundAlbedo = new Vector3(0.3f, 0.3f, 0.3f);
+        [Min(1)] public int multiScatteringWidth = 32;
+        [Min(1)] public int multiScatteringHeight = 32;
+        [Min(1)] public int multiScatteringSphereSamples = 64;
+        [Min(1)] public int multiScatteringRaySteps = 20;
+
         private void OnValidate()
         {
             topRadiusKm = Mathf.Max(topRadiusKm, groundRadiusKm + 1.0f);
@@ -37,6 +44,10 @@ namespace Landscape.Atmosphere
             transmittanceWidth = Mathf.Max(1, transmittanceWidth);
             transmittanceHeight = Mathf.Max(1, transmittanceHeight);
             transmittanceSteps = Mathf.Max(1, transmittanceSteps);
+            multiScatteringWidth = Mathf.Max(1, multiScatteringWidth);
+            multiScatteringHeight = Mathf.Max(1, multiScatteringHeight);
+            multiScatteringSphereSamples = Mathf.Max(1, multiScatteringSphereSamples);
+            multiScatteringRaySteps = Mathf.Max(1, multiScatteringRaySteps);
         }
     }
 }

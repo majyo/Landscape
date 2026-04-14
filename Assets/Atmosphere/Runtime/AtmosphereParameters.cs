@@ -17,7 +17,13 @@ namespace Landscape.Atmosphere
         public int TransmittanceWidth;
         public int TransmittanceHeight;
         public int TransmittanceSteps;
-        public int Hash;
+        public Vector3 GroundAlbedo;
+        public int MultiScatteringWidth;
+        public int MultiScatteringHeight;
+        public int MultiScatteringSphereSamples;
+        public int MultiScatteringRaySteps;
+        public int TransmittanceHash;
+        public int MultiScatteringHash;
 
         public static AtmosphereParameters FromProfile(AtmosphereProfile profile)
         {
@@ -36,13 +42,19 @@ namespace Landscape.Atmosphere
                 TransmittanceWidth = Mathf.Max(1, profile.transmittanceWidth),
                 TransmittanceHeight = Mathf.Max(1, profile.transmittanceHeight),
                 TransmittanceSteps = Mathf.Max(1, profile.transmittanceSteps),
+                GroundAlbedo = profile.groundAlbedo,
+                MultiScatteringWidth = Mathf.Max(1, profile.multiScatteringWidth),
+                MultiScatteringHeight = Mathf.Max(1, profile.multiScatteringHeight),
+                MultiScatteringSphereSamples = Mathf.Max(1, profile.multiScatteringSphereSamples),
+                MultiScatteringRaySteps = Mathf.Max(1, profile.multiScatteringRaySteps),
             };
 
-            parameters.Hash = ComputeHash(parameters);
+            parameters.TransmittanceHash = ComputeTransmittanceHash(parameters);
+            parameters.MultiScatteringHash = ComputeMultiScatteringHash(parameters);
             return parameters;
         }
 
-        private static int ComputeHash(AtmosphereParameters parameters)
+        private static int ComputeTransmittanceHash(AtmosphereParameters parameters)
         {
             unchecked
             {
@@ -68,6 +80,22 @@ namespace Landscape.Atmosphere
                 hash = (hash * 31) + parameters.TransmittanceWidth;
                 hash = (hash * 31) + parameters.TransmittanceHeight;
                 hash = (hash * 31) + parameters.TransmittanceSteps;
+                return hash;
+            }
+        }
+
+        private static int ComputeMultiScatteringHash(AtmosphereParameters parameters)
+        {
+            unchecked
+            {
+                int hash = parameters.TransmittanceHash;
+                hash = (hash * 31) + Quantize(parameters.GroundAlbedo.x);
+                hash = (hash * 31) + Quantize(parameters.GroundAlbedo.y);
+                hash = (hash * 31) + Quantize(parameters.GroundAlbedo.z);
+                hash = (hash * 31) + parameters.MultiScatteringWidth;
+                hash = (hash * 31) + parameters.MultiScatteringHeight;
+                hash = (hash * 31) + parameters.MultiScatteringSphereSamples;
+                hash = (hash * 31) + parameters.MultiScatteringRaySteps;
                 return hash;
             }
         }

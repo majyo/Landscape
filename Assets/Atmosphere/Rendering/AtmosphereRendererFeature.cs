@@ -9,10 +9,16 @@ namespace Landscape.Atmosphere
         [SerializeField] private bool runInSceneView = true;
 
         private AtmosphereTransmittancePass transmittancePass;
+        private AtmosphereMultiScatteringPass multiScatteringPass;
 
         public override void Create()
         {
             transmittancePass = new AtmosphereTransmittancePass
+            {
+                renderPassEvent = renderPassEvent
+            };
+
+            multiScatteringPass = new AtmosphereMultiScatteringPass
             {
                 renderPassEvent = renderPassEvent
             };
@@ -34,6 +40,7 @@ namespace Landscape.Atmosphere
                 return;
 
             renderer.EnqueuePass(transmittancePass);
+            renderer.EnqueuePass(multiScatteringPass);
         }
     }
 }

@@ -1,0 +1,135 @@
+#pragma kernel CSMain
+
+#include "../../Shaders/AtmosphereCommon.hlsl"
+
+TEXTURE2D(_AtmosphereTransmittanceLut);
+SAMPLER(sampler_AtmosphereTransmittanceLut);
+RWTexture2D<float4> _AtmosphereMultiScatteringLut;
+
+float _AtmosphereGroundRadiusKm;
+float _AtmosphereTopRadiusKm;
+float3 _AtmosphereRayleighScattering;
+float3 _AtmosphereMieScattering;
+float3 _AtmosphereMieAbsorption;
+float3 _AtmosphereOzoneAbsorption;
+float4 _AtmosphereScaleHeights;
+float4 _AtmosphereOzoneLayer;
+float4 _AtmosphereTransmittanceSize;
+int _AtmosphereTransmittanceSteps;
+float3 _AtmosphereGroundAlbedo;
+float4 _AtmosphereMultiScatteringSize;
+int _AtmosphereMultiScatteringSphereSamples;
+int _AtmosphereMultiScatteringRaySteps;
+
+float3 GetScattering(float heightKm)
+{
+    float rhoR = GetRayleighDensity(heightKm, _AtmosphereScaleHeights.x);
+    float rhoM = GetMieDensity(heightKm, _AtmosphereScaleHeights.y);
+    return _AtmosphereRayleighScattering * rhoR + _AtmosphereMieScattering * rhoM;
+}
+
+[numthreads(8, 8, 1)]
+void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+    uint width = (uint)_AtmosphereMultiScatteringSize.x;
+    uint height = (uint)_AtmosphereMultiScatteringSize.y;
+
+    if (dispatchThreadId.x >= width || dispatchThreadId.y >= height)
+        return;
+
+    float2 uv = (float2(dispatchThreadId.xy) + 0.5) / float2(width, height);
+    float radiusKm = lerp(_AtmosphereGroundRadiusKm, _AtmosphereTopRadiusKm, uv.y);
+    float cosSunZenith = uv.x * 2.0 - 1.0;
+    float sinSunZenith = sqrt(saturate(1.0 - cosSunZenith * cosSunZenith));
+
+    float3 samplePointKm = float3(0.0, radiusKm, 0.0);
+    float3 sunDirection = normalize(float3(sinSunZenith, cosSunZenith, 0.0));
+    float3 l2ndOrder = 0.0;
+    float3 fMs = 0.0;
+
+    uint sphereSampleCount = max(1, (uint)_AtmosphereMultiScatteringSphereSamples);
+    int raySteps = max(1, _AtmosphereMultiScatteringRaySteps);
+    float solidAnglePerSample = 4.0 * PI / sphereSampleCount;
+
+    [loop]
+    for (uint sampleIndex = 0; sampleIndex < sphereSampleCount; ++sampleIndex)
+    {
+        float3 rayDirection = GetFibonacciSphereDirection(sampleIndex, sphereSampleCount);
+        float distanceToTop = RaySphereIntersectFar(samplePointKm, rayDirection, _AtmosphereTopRadiusKm);
+        float distanceToGround = RaySphereIntersectNearest(samplePointKm, rayDirection, _AtmosphereGroundRadiusKm);
+
+        float maxDistance = distanceToTop;
+        bool hitGround = distanceToGround > 0.0 && distanceToGround < maxDistance;
+        if (hitGround)
+            maxDistance = distanceToGround;
+
+        if (maxDistance <= 0.0)
+            continue;
+
+        float dt = maxDistance / raySteps;
+        float3 opticalDepth = 0.0;
+        float3 rayL2nd = 0.0;
+        float3 rayFms = 0.0;
+
+        [loop]
+        for (int stepIndex = 0; stepIndex < raySteps; ++stepIndex)
+        {
+            float t = (stepIndex + 0.5) * dt;
+            float3 marchedPointKm = samplePointKm + rayDirection * t;
+            float heightKm = GetAtmosphereHeightKm(marchedPointKm, _AtmosphereGroundRadiusKm);
+            float3 sigmaS = GetScattering(heightKm);
+            float3 sigmaT = GetExtinction(
+                heightKm,
+                _AtmosphereRayleighScattering,
+                _AtmosphereMieScattering,
+                _AtmosphereMieAbsorption,
+                _AtmosphereOzoneAbsorption,
+                _AtmosphereScaleHeights.x,
+                _AtmosphereScaleHeights.y,
+                _AtmosphereOzoneLayer.x,
+                _AtmosphereOzoneLayer.y);
+
+            float3 transmitSampleToSun = SampleTransmittanceLut(
+                _AtmosphereTransmittanceLut,
+                sampler_AtmosphereTransmittanceLut,
+                marchedPointKm,
+                sunDirection,
+                _AtmosphereGroundRadiusKm,
+                _AtmosphereTopRadiusKm);
+            float earthShadow = GetPlanetShadow(marchedPointKm, sunDirection, _AtmosphereGroundRadiusKm);
+            float3 t1 = transmitSampleToSun * earthShadow;
+            float3 t2 = exp(-opticalDepth);
+
+            rayL2nd += t2 * sigmaS * t1 * INV_FOUR_PI * dt;
+            rayFms += t2 * sigmaS * INV_FOUR_PI * dt;
+            opticalDepth += sigmaT * dt;
+        }
+
+        if (hitGround)
+        {
+            float3 hitPositionKm = samplePointKm + rayDirection * maxDistance;
+            float3 toGroundTransmittance = exp(-opticalDepth);
+            float cosSunGround = dot(normalize(hitPositionKm), sunDirection);
+            float3 groundToSunTransmittance = SampleTransmittanceLut(
+                _AtmosphereTransmittanceLut,
+                sampler_AtmosphereTransmittanceLut,
+                _AtmosphereGroundRadiusKm,
+                cosSunGround,
+                _AtmosphereGroundRadiusKm,
+                _AtmosphereTopRadiusKm);
+            float groundShadow = cosSunGround > 0.0 ? 1.0 : 0.0;
+            float3 groundLuminance = groundToSunTransmittance * groundShadow * (_AtmosphereGroundAlbedo * INV_PI) * max(cosSunGround, 0.0);
+            rayL2nd += toGroundTransmittance * groundLuminance * INV_FOUR_PI;
+        }
+
+        l2ndOrder += rayL2nd;
+        fMs += rayFms;
+    }
+
+    l2ndOrder *= solidAnglePerSample;
+    fMs *= solidAnglePerSample;
+
+    float3 safeFms = clamp(fMs, 0.0, 0.999);
+    float3 multiScattering = l2ndOrder / max(1.0 - safeFms, 1e-4);
+    _AtmosphereMultiScatteringLut[dispatchThreadId.xy] = float4(multiScattering, 1.0);
+}
