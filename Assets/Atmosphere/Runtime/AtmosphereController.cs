@@ -8,6 +8,7 @@ namespace Atmosphere.Runtime
     public sealed class AtmosphereController : MonoBehaviour
     {
         private const string DefaultProfilePath = "Atmosphere/AtmosphereProfile_Earth";
+        private const string DebugSliceShaderPath = "Hidden/Landscape/AtmosphereDebugSlice";
         private const float OverlayPaddingLeft = 8.0f;
         private const float OverlayPaddingRight = 8.0f;
         private const float OverlayPaddingTop = 6.0f;
@@ -17,26 +18,38 @@ namespace Atmosphere.Runtime
         [SerializeField] private Light mainLight;
         [SerializeField] private bool showDebugOverlay = true;
         [SerializeField] private Vector2 debugOverlaySize = new Vector2(384.0f, 96.0f);
+        [SerializeField] private bool showAerialPerspectiveDebug = true;
+        [SerializeField] [Range(0.0f, 1.0f)] private float aerialDebugSlice = 0.5f;
 
         private AtmosphereLutManager lutManager;
         private bool forceRebuild = true;
         private bool forceMultiScatteringRebuild = true;
+        private bool forceAerialPerspectiveRebuild = true;
         private GUIStyle overlayLabelStyle;
         private GUIStyle overlayTitleStyle;
+        private Material debugSliceMaterial;
+        private RenderTexture aerialScatteringDebugTexture;
+        private RenderTexture aerialTransmittanceDebugTexture;
 
         public static AtmosphereController Instance => instance;
         public RTHandle TransmittanceHandle => lutManager != null ? lutManager.TransmittanceHandle : null;
         public RTHandle MultiScatteringHandle => lutManager != null ? lutManager.MultiScatteringHandle : null;
         public RTHandle SkyViewHandle => lutManager != null ? lutManager.SkyViewHandle : null;
+        public RTHandle AerialScatteringHandle => lutManager != null ? lutManager.AerialScatteringHandle : null;
+        public RTHandle AerialTransmittanceHandle => lutManager != null ? lutManager.AerialTransmittanceHandle : null;
         public RenderTexture TransmittanceTexture => lutManager != null ? lutManager.TransmittanceTexture : null;
         public RenderTexture MultiScatteringTexture => lutManager != null ? lutManager.MultiScatteringTexture : null;
         public RenderTexture SkyViewTexture => lutManager != null ? lutManager.SkyViewTexture : null;
+        public RenderTexture AerialScatteringTexture => lutManager != null ? lutManager.AerialScatteringTexture : null;
+        public RenderTexture AerialTransmittanceTexture => lutManager != null ? lutManager.AerialTransmittanceTexture : null;
         public ComputeShader TransmittanceComputeShader => lutManager != null ? lutManager.TransmittanceComputeShader : null;
         public ComputeShader MultiScatteringComputeShader => lutManager != null ? lutManager.MultiScatteringComputeShader : null;
         public ComputeShader SkyViewComputeShader => lutManager != null ? lutManager.SkyViewComputeShader : null;
+        public ComputeShader AerialPerspectiveComputeShader => lutManager != null ? lutManager.AerialPerspectiveComputeShader : null;
         public int TransmittanceKernelIndex => lutManager != null ? lutManager.TransmittanceKernelIndex : -1;
         public int MultiScatteringKernelIndex => lutManager != null ? lutManager.MultiScatteringKernelIndex : -1;
         public int SkyViewKernelIndex => lutManager != null ? lutManager.SkyViewKernelIndex : -1;
+        public int AerialPerspectiveKernelIndex => lutManager != null ? lutManager.AerialPerspectiveKernelIndex : -1;
 
         private void Reset()
         {
@@ -59,6 +72,7 @@ namespace Atmosphere.Runtime
             TryAssignMainLight();
             forceRebuild = true;
             forceMultiScatteringRebuild = true;
+            forceAerialPerspectiveRebuild = true;
         }
 
         private void OnDisable()
@@ -68,6 +82,8 @@ namespace Atmosphere.Runtime
 
             if (lutManager != null)
                 lutManager.Release();
+
+            ReleaseDebugResources();
         }
 
         private void OnValidate()
@@ -76,6 +92,7 @@ namespace Atmosphere.Runtime
             TryAssignMainLight();
             forceRebuild = true;
             forceMultiScatteringRebuild = true;
+            forceAerialPerspectiveRebuild = true;
         }
 
         public bool TryPrepareForRender(out AtmosphereParameters parameters)
@@ -120,6 +137,19 @@ namespace Atmosphere.Runtime
             return true;
         }
 
+        public bool TryPrepareForAerialPerspective(Camera camera, out AtmosphereParameters parameters, out AtmosphereViewParameters viewParameters)
+        {
+            viewParameters = default;
+            if (!TryPrepareForSkyView(camera, out parameters, out viewParameters))
+                return false;
+
+            if (!lutManager.EnsureAerialPerspectiveResources(parameters))
+                return false;
+
+            SyncImmediateShaderGlobals(parameters, viewParameters);
+            return true;
+        }
+
         public bool NeedsTransmittanceRebuild(in AtmosphereParameters parameters)
         {
             return forceRebuild || lutManager == null || lutManager.NeedsTransmittanceRebuild(parameters);
@@ -135,6 +165,13 @@ namespace Atmosphere.Runtime
             return lutManager == null || lutManager.NeedsSkyViewRebuild(parameters, viewParameters.DynamicHash);
         }
 
+        public bool NeedsAerialPerspectiveRebuild(in AtmosphereParameters parameters, in AtmosphereViewParameters viewParameters)
+        {
+            return forceAerialPerspectiveRebuild
+                || lutManager == null
+                || lutManager.NeedsAerialPerspectiveRebuild(parameters, viewParameters.DynamicHash);
+        }
+
         public void RenderTransmittance(CommandBuffer cmd, in AtmosphereParameters parameters)
         {
             lutManager ??= new AtmosphereLutManager();
@@ -142,6 +179,7 @@ namespace Atmosphere.Runtime
             lutManager.BindGlobals(cmd, parameters);
             forceRebuild = false;
             forceMultiScatteringRebuild = true;
+            forceAerialPerspectiveRebuild = true;
         }
 
         public void MarkTransmittanceRendered(in AtmosphereParameters parameters)
@@ -149,6 +187,7 @@ namespace Atmosphere.Runtime
             lutManager?.MarkTransmittanceRendered(parameters);
             forceRebuild = false;
             forceMultiScatteringRebuild = true;
+            forceAerialPerspectiveRebuild = true;
         }
 
         public void RenderMultiScattering(CommandBuffer cmd, in AtmosphereParameters parameters)
@@ -157,12 +196,14 @@ namespace Atmosphere.Runtime
             lutManager.RenderMultiScattering(cmd, parameters);
             lutManager.BindGlobals(cmd, parameters);
             forceMultiScatteringRebuild = false;
+            forceAerialPerspectiveRebuild = true;
         }
 
         public void MarkMultiScatteringRendered(in AtmosphereParameters parameters)
         {
             lutManager?.MarkMultiScatteringRendered(parameters);
             forceMultiScatteringRebuild = false;
+            forceAerialPerspectiveRebuild = true;
         }
 
         public void RenderSkyView(CommandBuffer cmd, in AtmosphereParameters parameters, in AtmosphereViewParameters viewParameters)
@@ -171,17 +212,40 @@ namespace Atmosphere.Runtime
             lutManager.RenderSkyView(cmd, parameters, viewParameters);
             lutManager.BindGlobals(cmd, parameters);
             AtmosphereLutManager.BindSkyViewGlobals(cmd, parameters, viewParameters);
+            forceAerialPerspectiveRebuild = true;
         }
 
         public void MarkSkyViewRendered(in AtmosphereParameters parameters, in AtmosphereViewParameters viewParameters)
         {
             lutManager?.MarkSkyViewRendered(parameters, viewParameters);
+            forceAerialPerspectiveRebuild = true;
+        }
+
+        public void RenderAerialPerspective(CommandBuffer cmd, in AtmosphereParameters parameters, in AtmosphereViewParameters viewParameters)
+        {
+            lutManager ??= new AtmosphereLutManager();
+            lutManager.RenderAerialPerspective(cmd, parameters, viewParameters);
+            lutManager.BindGlobals(cmd, parameters);
+            AtmosphereLutManager.BindAerialPerspectiveGlobals(cmd, parameters, viewParameters);
+            forceAerialPerspectiveRebuild = false;
+        }
+
+        public void MarkAerialPerspectiveRendered(in AtmosphereParameters parameters, in AtmosphereViewParameters viewParameters)
+        {
+            lutManager?.MarkAerialPerspectiveRendered(parameters, viewParameters);
+            forceAerialPerspectiveRebuild = false;
         }
 
         public void BindSkyViewGlobals(CommandBuffer cmd, in AtmosphereParameters parameters, in AtmosphereViewParameters viewParameters)
         {
             BindGlobals(cmd, parameters);
             AtmosphereLutManager.BindSkyViewGlobals(cmd, parameters, viewParameters);
+        }
+
+        public void BindAerialPerspectiveGlobals(CommandBuffer cmd, in AtmosphereParameters parameters, in AtmosphereViewParameters viewParameters)
+        {
+            BindGlobals(cmd, parameters);
+            AtmosphereLutManager.BindAerialPerspectiveGlobals(cmd, parameters, viewParameters);
         }
 
         public void BindGlobals(CommandBuffer cmd, in AtmosphereParameters parameters)
@@ -233,6 +297,24 @@ namespace Atmosphere.Runtime
                         1.0f / parameters.SkyViewHeight));
             }
 
+            if (AerialScatteringTexture != null)
+                Shader.SetGlobalTexture(AtmosphereShaderIDs.AerialScatteringLut, AerialScatteringTexture);
+
+            if (AerialTransmittanceTexture != null)
+                Shader.SetGlobalTexture(AtmosphereShaderIDs.AerialTransmittanceLut, AerialTransmittanceTexture);
+
+            if (AerialScatteringTexture != null || AerialTransmittanceTexture != null)
+            {
+                Shader.SetGlobalVector(
+                    AtmosphereShaderIDs.AerialPerspectiveSize,
+                    new Vector4(
+                        parameters.AerialPerspectiveWidth,
+                        parameters.AerialPerspectiveHeight,
+                        parameters.AerialPerspectiveDepth,
+                        1.0f / parameters.AerialPerspectiveDepth));
+                Shader.SetGlobalFloat(AtmosphereShaderIDs.AerialPerspectiveMaxDistanceKm, parameters.AerialPerspectiveMaxDistanceKm);
+            }
+
             Shader.SetGlobalVector(AtmosphereShaderIDs.SunDirection, viewParameters.SunDirection);
             Shader.SetGlobalVector(AtmosphereShaderIDs.SunIlluminance, viewParameters.SunIlluminance);
             Shader.SetGlobalFloat(AtmosphereShaderIDs.MiePhaseG, parameters.MiePhaseG);
@@ -240,6 +322,8 @@ namespace Atmosphere.Runtime
             Shader.SetGlobalVector(AtmosphereShaderIDs.CameraBasisRight, viewParameters.CameraBasisRight);
             Shader.SetGlobalVector(AtmosphereShaderIDs.CameraBasisUp, viewParameters.CameraBasisUp);
             Shader.SetGlobalVector(AtmosphereShaderIDs.CameraBasisForward, viewParameters.CameraBasisForward);
+            Shader.SetGlobalFloat(AtmosphereShaderIDs.CameraTanHalfVerticalFov, viewParameters.TanHalfVerticalFov);
+            Shader.SetGlobalFloat(AtmosphereShaderIDs.CameraAspectRatio, viewParameters.AspectRatio);
         }
 
         private void OnGUI()
@@ -250,7 +334,20 @@ namespace Atmosphere.Runtime
             RenderTexture texture = TransmittanceTexture;
             RenderTexture multiScatteringTexture = MultiScatteringTexture;
             RenderTexture skyViewTexture = SkyViewTexture;
-            if (texture == null && multiScatteringTexture == null && skyViewTexture == null)
+            RenderTexture aerialScatteringTexture = null;
+            RenderTexture aerialTransmittanceTexture = null;
+            if (showAerialPerspectiveDebug)
+            {
+                UpdateAerialPerspectiveDebugTextures();
+                aerialScatteringTexture = this.aerialScatteringDebugTexture;
+                aerialTransmittanceTexture = this.aerialTransmittanceDebugTexture;
+            }
+
+            if (texture == null
+                && multiScatteringTexture == null
+                && skyViewTexture == null
+                && aerialScatteringTexture == null
+                && aerialTransmittanceTexture == null)
                 return;
 
             EnsureOverlayStyles();
@@ -258,7 +355,11 @@ namespace Atmosphere.Runtime
             float width = Mathf.Max(128.0f, debugOverlaySize.x);
             float height = Mathf.Max(32.0f, debugOverlaySize.y);
             float blockHeight = height + 24.0f;
-            int blockCount = (texture != null ? 1 : 0) + (multiScatteringTexture != null ? 1 : 0) + (skyViewTexture != null ? 1 : 0);
+            int blockCount = (texture != null ? 1 : 0)
+                + (multiScatteringTexture != null ? 1 : 0)
+                + (skyViewTexture != null ? 1 : 0)
+                + (aerialScatteringTexture != null ? 1 : 0)
+                + (aerialTransmittanceTexture != null ? 1 : 0);
             Rect panelRect = new Rect(16.0f, 16.0f, width + OverlayPaddingLeft + OverlayPaddingRight, blockCount * blockHeight + 20.0f);
             GUI.Box(panelRect, GUIContent.none);
 
@@ -276,6 +377,16 @@ namespace Atmosphere.Runtime
             if (skyViewTexture != null)
             {
                 DrawOverlayTexture(panelRect.x, ref cursorY, width, height, skyViewTexture, "Atmosphere Sky-View LUT");
+            }
+
+            if (aerialScatteringTexture != null)
+            {
+                DrawOverlayTexture(panelRect.x, ref cursorY, width, height, aerialScatteringTexture, $"Aerial Scattering Slice ({Mathf.RoundToInt(aerialDebugSlice * 100.0f)}%)");
+            }
+
+            if (aerialTransmittanceTexture != null)
+            {
+                DrawOverlayTexture(panelRect.x, ref cursorY, width, height, aerialTransmittanceTexture, $"Aerial Transmittance Slice ({Mathf.RoundToInt(aerialDebugSlice * 100.0f)}%)");
             }
         }
 
@@ -356,7 +467,10 @@ namespace Atmosphere.Runtime
 
             Vector3 sunDirection = GetSunDirection();
             Vector3 sunIlluminance = parameters.SunIlluminance * GetSunIntensityScale();
-            return new AtmosphereViewParameters(cameraPositionKm, right, up, forward, sunDirection, sunIlluminance);
+            float verticalFovRadians = Mathf.Deg2Rad * Mathf.Max(1.0f, camera.fieldOfView);
+            float tanHalfVerticalFov = Mathf.Tan(verticalFovRadians * 0.5f);
+            float aspectRatio = camera.aspect > 0.0f ? camera.aspect : 1.0f;
+            return new AtmosphereViewParameters(cameraPositionKm, right, up, forward, sunDirection, sunIlluminance, tanHalfVerticalFov, aspectRatio);
         }
 
         private Vector3 GetSunDirection()
@@ -373,6 +487,95 @@ namespace Atmosphere.Runtime
                 return 1.0f;
 
             return Mathf.Max(0.0f, mainLight.intensity);
+        }
+
+        private void UpdateAerialPerspectiveDebugTextures()
+        {
+            if (AerialScatteringTexture == null || AerialTransmittanceTexture == null)
+            {
+                ReleaseDebugTexturesOnly();
+                return;
+            }
+
+            Shader shader = Shader.Find(DebugSliceShaderPath);
+            if (shader == null)
+                return;
+
+            if (debugSliceMaterial == null || debugSliceMaterial.shader != shader)
+                debugSliceMaterial = new Material(shader);
+
+            EnsureDebugTexture(ref aerialScatteringDebugTexture, AerialScatteringTexture.width, AerialScatteringTexture.height, "Atmosphere Aerial Scattering Debug");
+            EnsureDebugTexture(ref aerialTransmittanceDebugTexture, AerialTransmittanceTexture.width, AerialTransmittanceTexture.height, "Atmosphere Aerial Transmittance Debug");
+
+            debugSliceMaterial.SetFloat(AtmosphereShaderIDs.AerialDebugSlice, aerialDebugSlice);
+            debugSliceMaterial.SetTexture("_MainTex3D", AerialScatteringTexture);
+            Graphics.Blit(null, aerialScatteringDebugTexture, debugSliceMaterial, 0);
+            debugSliceMaterial.SetTexture("_MainTex3D", AerialTransmittanceTexture);
+            Graphics.Blit(null, aerialTransmittanceDebugTexture, debugSliceMaterial, 0);
+        }
+
+        private void EnsureDebugTexture(ref RenderTexture texture, int width, int height, string textureName)
+        {
+            if (texture != null && (texture.width != width || texture.height != height))
+            {
+                if (Application.isPlaying)
+                    Destroy(texture);
+                else
+                    DestroyImmediate(texture);
+
+                texture = null;
+            }
+
+            if (texture != null)
+                return;
+
+            texture = new RenderTexture(width, height, 0, RenderTextureFormat.ARGBHalf, RenderTextureReadWrite.Linear)
+            {
+                name = textureName,
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+                useMipMap = false,
+                autoGenerateMips = false
+            };
+            texture.Create();
+        }
+
+        private void ReleaseDebugTexturesOnly()
+        {
+            if (aerialScatteringDebugTexture != null)
+            {
+                if (Application.isPlaying)
+                    Destroy(aerialScatteringDebugTexture);
+                else
+                    DestroyImmediate(aerialScatteringDebugTexture);
+
+                aerialScatteringDebugTexture = null;
+            }
+
+            if (aerialTransmittanceDebugTexture != null)
+            {
+                if (Application.isPlaying)
+                    Destroy(aerialTransmittanceDebugTexture);
+                else
+                    DestroyImmediate(aerialTransmittanceDebugTexture);
+
+                aerialTransmittanceDebugTexture = null;
+            }
+        }
+
+        private void ReleaseDebugResources()
+        {
+            ReleaseDebugTexturesOnly();
+
+            if (debugSliceMaterial != null)
+            {
+                if (Application.isPlaying)
+                    Destroy(debugSliceMaterial);
+                else
+                    DestroyImmediate(debugSliceMaterial);
+
+                debugSliceMaterial = null;
+            }
         }
     }
 }

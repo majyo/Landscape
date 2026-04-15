@@ -23,6 +23,10 @@ namespace Atmosphere.Runtime
         public static readonly int SkyViewLut = Shader.PropertyToID("_AtmosphereSkyViewLut");
         public static readonly int SkyViewSize = Shader.PropertyToID("_AtmosphereSkyViewSize");
         public static readonly int SkyViewRaySteps = Shader.PropertyToID("_AtmosphereSkyViewRaySteps");
+        public static readonly int AerialScatteringLut = Shader.PropertyToID("_AtmosphereAerialScatteringLut");
+        public static readonly int AerialTransmittanceLut = Shader.PropertyToID("_AtmosphereAerialTransmittanceLut");
+        public static readonly int AerialPerspectiveSize = Shader.PropertyToID("_AtmosphereAerialPerspectiveSize");
+        public static readonly int AerialPerspectiveMaxDistanceKm = Shader.PropertyToID("_AtmosphereAerialPerspectiveMaxDistanceKm");
         public static readonly int SunDirection = Shader.PropertyToID("_AtmosphereSunDirection");
         public static readonly int SunIlluminance = Shader.PropertyToID("_AtmosphereSunIlluminance");
         public static readonly int MiePhaseG = Shader.PropertyToID("_AtmosphereMiePhaseG");
@@ -30,6 +34,9 @@ namespace Atmosphere.Runtime
         public static readonly int CameraBasisRight = Shader.PropertyToID("_AtmosphereCameraBasisRight");
         public static readonly int CameraBasisUp = Shader.PropertyToID("_AtmosphereCameraBasisUp");
         public static readonly int CameraBasisForward = Shader.PropertyToID("_AtmosphereCameraBasisForward");
+        public static readonly int CameraTanHalfVerticalFov = Shader.PropertyToID("_AtmosphereCameraTanHalfVerticalFov");
+        public static readonly int CameraAspectRatio = Shader.PropertyToID("_AtmosphereCameraAspectRatio");
         public static readonly int CameraSkyViewMatrix = Shader.PropertyToID("_AtmosphereCameraSkyViewMatrix");
+        public static readonly int AerialDebugSlice = Shader.PropertyToID("_AtmosphereAerialDebugSlice");
     }
 }

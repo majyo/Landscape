@@ -1,0 +1,131 @@
+#pragma kernel CSMain
+
+#include "../../Shaders/AtmosphereCommon.hlsl"
+
+Texture2D _AtmosphereTransmittanceLut;
+SamplerState sampler_AtmosphereTransmittanceLut;
+Texture2D _AtmosphereMultiScatteringLut;
+SamplerState sampler_AtmosphereMultiScatteringLut;
+RWTexture3D<float4> _AtmosphereAerialScatteringLut;
+RWTexture3D<float4> _AtmosphereAerialTransmittanceLut;
+
+float _AtmosphereGroundRadiusKm;
+float _AtmosphereTopRadiusKm;
+float3 _AtmosphereRayleighScattering;
+float3 _AtmosphereMieScattering;
+float3 _AtmosphereMieAbsorption;
+float3 _AtmosphereOzoneAbsorption;
+float4 _AtmosphereScaleHeights;
+float4 _AtmosphereOzoneLayer;
+float4 _AtmosphereTransmittanceSize;
+int _AtmosphereTransmittanceSteps;
+float4 _AtmosphereMultiScatteringSize;
+float4 _AtmosphereAerialPerspectiveSize;
+float _AtmosphereAerialPerspectiveMaxDistanceKm;
+float3 _AtmosphereSunDirection;
+float3 _AtmosphereSunIlluminance;
+float _AtmosphereMiePhaseG;
+float3 _AtmosphereCameraPositionKm;
+float3 _AtmosphereCameraBasisRight;
+float3 _AtmosphereCameraBasisUp;
+float3 _AtmosphereCameraBasisForward;
+float _AtmosphereCameraTanHalfVerticalFov;
+float _AtmosphereCameraAspectRatio;
+
+void GetScattering(float heightKm, out float3 rayleighScattering, out float3 mieScattering)
+{
+    float rhoR = GetRayleighDensity(heightKm, _AtmosphereScaleHeights.x);
+    float rhoM = GetMieDensity(heightKm, _AtmosphereScaleHeights.y);
+    rayleighScattering = _AtmosphereRayleighScattering * rhoR;
+    mieScattering = _AtmosphereMieScattering * rhoM;
+}
+
+[numthreads(8, 8, 1)]
+void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+    uint width = (uint)_AtmosphereAerialPerspectiveSize.x;
+    uint height = (uint)_AtmosphereAerialPerspectiveSize.y;
+    uint depth = (uint)_AtmosphereAerialPerspectiveSize.z;
+
+    if (dispatchThreadId.x >= width || dispatchThreadId.y >= height)
+        return;
+
+    float2 uv = (float2(dispatchThreadId.xy) + 0.5) / float2(width, height);
+    float3 rayDirection = GetCameraRayDirection(
+        uv,
+        _AtmosphereCameraTanHalfVerticalFov,
+        _AtmosphereCameraAspectRatio,
+        normalize(_AtmosphereCameraBasisRight),
+        normalize(_AtmosphereCameraBasisUp),
+        normalize(_AtmosphereCameraBasisForward));
+
+    float3 cameraPositionKm = _AtmosphereCameraPositionKm;
+    float3 sunDirection = normalize(_AtmosphereSunDirection);
+    float cosTheta = dot(rayDirection, sunDirection);
+    float phaseRayleigh = PhaseRayleigh(cosTheta);
+    float phaseMie = PhaseMieCornetteShanks(cosTheta, _AtmosphereMiePhaseG);
+
+    float3 accumScattering = 0.0;
+    float3 accumTransmittance = 1.0;
+    float lastDistanceKm = 0.0;
+
+    [loop]
+    for (uint z = 0; z < depth; ++z)
+    {
+        float normalizedZ = ((float)z + 0.5) / depth;
+        float currentDistanceKm = SliceToDistanceKm(normalizedZ, _AtmosphereAerialPerspectiveMaxDistanceKm);
+        float dt = max(currentDistanceKm - lastDistanceKm, 1e-4);
+        float t = lastDistanceKm + dt * 0.5;
+        float3 samplePositionKm = cameraPositionKm + rayDirection * t;
+        float radiusKm = length(samplePositionKm);
+        float heightKm = GetAtmosphereHeightKm(samplePositionKm, _AtmosphereGroundRadiusKm);
+
+        float3 sigmaSR;
+        float3 sigmaSM;
+        GetScattering(heightKm, sigmaSR, sigmaSM);
+        float3 sigmaS = sigmaSR + sigmaSM;
+        float3 sigmaT = GetExtinction(
+            heightKm,
+            _AtmosphereRayleighScattering,
+            _AtmosphereMieScattering,
+            _AtmosphereMieAbsorption,
+            _AtmosphereOzoneAbsorption,
+            _AtmosphereScaleHeights.x,
+            _AtmosphereScaleHeights.y,
+            _AtmosphereOzoneLayer.x,
+            _AtmosphereOzoneLayer.y);
+
+        float cosSunZenith = dot(normalize(samplePositionKm), sunDirection);
+        float3 transmittanceToSun = SampleTransmittanceLut(
+            _AtmosphereTransmittanceLut,
+            sampler_AtmosphereTransmittanceLut,
+            radiusKm,
+            cosSunZenith,
+            _AtmosphereGroundRadiusKm,
+            _AtmosphereTopRadiusKm);
+        float earthShadow = GetPlanetShadow(samplePositionKm, sunDirection, _AtmosphereGroundRadiusKm);
+
+        float3 singleScattering = transmittanceToSun * earthShadow * _AtmosphereSunIlluminance
+            * (sigmaSR * phaseRayleigh + sigmaSM * phaseMie);
+        float3 multiScattering = SampleMultiScatteringLut(
+            _AtmosphereMultiScatteringLut,
+            sampler_AtmosphereMultiScatteringLut,
+            radiusKm,
+            cosSunZenith,
+            _AtmosphereGroundRadiusKm,
+            _AtmosphereTopRadiusKm) * sigmaS * _AtmosphereSunIlluminance;
+
+        float3 sourceTerm = singleScattering + multiScattering;
+        float3 stepTransmittance = exp(-sigmaT * dt);
+        float3 integratedScattering = (sourceTerm - sourceTerm * stepTransmittance) / max(sigmaT, 1e-5);
+
+        accumScattering += accumTransmittance * integratedScattering;
+        accumTransmittance *= stepTransmittance;
+
+        uint3 writePos = uint3(dispatchThreadId.xy, z);
+        _AtmosphereAerialScatteringLut[writePos] = float4(max(accumScattering, 0.0), 1.0);
+        _AtmosphereAerialTransmittanceLut[writePos] = float4(saturate(accumTransmittance), 1.0);
+
+        lastDistanceKm = currentDistanceKm;
+    }
+}

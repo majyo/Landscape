@@ -8,45 +8,61 @@ namespace Atmosphere.Runtime
         private const string TransmittanceComputeShaderPath = "Atmosphere/AtmosphereTransmittance";
         private const string MultiScatteringComputeShaderPath = "Atmosphere/AtmosphereMultiScattering";
         private const string SkyViewComputeShaderPath = "Atmosphere/AtmosphereSkyView";
+        private const string AerialPerspectiveComputeShaderPath = "Atmosphere/AtmosphereAerialPerspective";
         private const string KernelName = "CSMain";
 
         private ComputeShader transmittanceComputeShader;
         private ComputeShader multiScatteringComputeShader;
         private ComputeShader skyViewComputeShader;
+        private ComputeShader aerialPerspectiveComputeShader;
         private int transmittanceKernelIndex = -1;
         private int multiScatteringKernelIndex = -1;
         private int skyViewKernelIndex = -1;
+        private int aerialPerspectiveKernelIndex = -1;
 
         private RenderTexture transmittanceTexture;
         private RenderTexture multiScatteringTexture;
         private RenderTexture skyViewTexture;
+        private RenderTexture aerialScatteringTexture;
+        private RenderTexture aerialTransmittanceTexture;
         private RTHandle transmittanceHandle;
         private RTHandle multiScatteringHandle;
         private RTHandle skyViewHandle;
+        private RTHandle aerialScatteringHandle;
+        private RTHandle aerialTransmittanceHandle;
 
         private int currentTransmittanceHash = int.MinValue;
         private int currentMultiScatteringHash = int.MinValue;
         private int currentSkyViewHash = int.MinValue;
         private int currentSkyViewDynamicHash = int.MinValue;
+        private int currentAerialPerspectiveHash = int.MinValue;
+        private int currentAerialPerspectiveDynamicHash = int.MinValue;
 
         private bool loggedUnsupportedCompute;
         private bool loggedBuildInfo;
         private bool loggedMissingTransmittanceShader;
         private bool loggedMissingMultiScatteringShader;
         private bool loggedMissingSkyViewShader;
+        private bool loggedMissingAerialPerspectiveShader;
 
         public ComputeShader TransmittanceComputeShader => LoadTransmittanceComputeShader();
         public ComputeShader MultiScatteringComputeShader => LoadMultiScatteringComputeShader();
         public ComputeShader SkyViewComputeShader => LoadSkyViewComputeShader();
+        public ComputeShader AerialPerspectiveComputeShader => LoadAerialPerspectiveComputeShader();
         public int TransmittanceKernelIndex => transmittanceKernelIndex;
         public int MultiScatteringKernelIndex => multiScatteringKernelIndex;
         public int SkyViewKernelIndex => skyViewKernelIndex;
+        public int AerialPerspectiveKernelIndex => aerialPerspectiveKernelIndex;
         public RenderTexture TransmittanceTexture => transmittanceTexture;
         public RenderTexture MultiScatteringTexture => multiScatteringTexture;
         public RenderTexture SkyViewTexture => skyViewTexture;
+        public RenderTexture AerialScatteringTexture => aerialScatteringTexture;
+        public RenderTexture AerialTransmittanceTexture => aerialTransmittanceTexture;
         public RTHandle TransmittanceHandle => transmittanceHandle;
         public RTHandle MultiScatteringHandle => multiScatteringHandle;
         public RTHandle SkyViewHandle => skyViewHandle;
+        public RTHandle AerialScatteringHandle => aerialScatteringHandle;
+        public RTHandle AerialTransmittanceHandle => aerialTransmittanceHandle;
 
         public bool EnsureTransmittanceResources(in AtmosphereParameters parameters)
         {
@@ -138,6 +154,49 @@ namespace Atmosphere.Runtime
             return skyViewTexture != null && skyViewHandle != null;
         }
 
+        public bool EnsureAerialPerspectiveResources(in AtmosphereParameters parameters)
+        {
+            if (!SystemInfo.supportsComputeShaders)
+            {
+                LogUnsupportedCompute();
+                ReleaseTextures(ref aerialScatteringTexture, ref aerialScatteringHandle);
+                ReleaseTextures(ref aerialTransmittanceTexture, ref aerialTransmittanceHandle);
+                return false;
+            }
+
+            if (LoadAerialPerspectiveComputeShader() == null)
+            {
+                if (!loggedMissingAerialPerspectiveShader)
+                {
+                    Debug.LogError("Atmosphere: failed to load Resources/Atmosphere/AtmosphereAerialPerspective.compute.");
+                    loggedMissingAerialPerspectiveShader = true;
+                }
+
+                ReleaseTextures(ref aerialScatteringTexture, ref aerialScatteringHandle);
+                ReleaseTextures(ref aerialTransmittanceTexture, ref aerialTransmittanceHandle);
+                return false;
+            }
+
+            EnsureVolumeTexture(
+                ref aerialScatteringTexture,
+                ref aerialScatteringHandle,
+                parameters.AerialPerspectiveWidth,
+                parameters.AerialPerspectiveHeight,
+                parameters.AerialPerspectiveDepth,
+                "Atmosphere Aerial Scattering LUT");
+            EnsureVolumeTexture(
+                ref aerialTransmittanceTexture,
+                ref aerialTransmittanceHandle,
+                parameters.AerialPerspectiveWidth,
+                parameters.AerialPerspectiveHeight,
+                parameters.AerialPerspectiveDepth,
+                "Atmosphere Aerial Transmittance LUT");
+            return aerialScatteringTexture != null
+                && aerialTransmittanceTexture != null
+                && aerialScatteringHandle != null
+                && aerialTransmittanceHandle != null;
+        }
+
         public bool NeedsTransmittanceRebuild(in AtmosphereParameters parameters)
         {
             return transmittanceTexture == null
@@ -163,6 +222,18 @@ namespace Atmosphere.Runtime
                 || currentMultiScatteringHash != parameters.MultiScatteringHash;
         }
 
+        public bool NeedsAerialPerspectiveRebuild(in AtmosphereParameters parameters, int dynamicHash)
+        {
+            return aerialScatteringTexture == null
+                || aerialTransmittanceTexture == null
+                || aerialScatteringHandle == null
+                || aerialTransmittanceHandle == null
+                || currentAerialPerspectiveHash != parameters.AerialPerspectiveHash
+                || currentAerialPerspectiveDynamicHash != dynamicHash
+                || currentTransmittanceHash != parameters.TransmittanceHash
+                || currentMultiScatteringHash != parameters.MultiScatteringHash;
+        }
+
         public void RenderTransmittance(CommandBuffer cmd, in AtmosphereParameters parameters)
         {
             if (!EnsureTransmittanceResources(parameters))
@@ -180,6 +251,7 @@ namespace Atmosphere.Runtime
             currentTransmittanceHash = parameters.TransmittanceHash;
             currentMultiScatteringHash = int.MinValue;
             currentSkyViewHash = int.MinValue;
+            currentAerialPerspectiveHash = int.MinValue;
             LogBuild(parameters, "transmittance", parameters.TransmittanceWidth, parameters.TransmittanceHeight);
         }
 
@@ -188,6 +260,7 @@ namespace Atmosphere.Runtime
             currentTransmittanceHash = parameters.TransmittanceHash;
             currentMultiScatteringHash = int.MinValue;
             currentSkyViewHash = int.MinValue;
+            currentAerialPerspectiveHash = int.MinValue;
         }
 
         public void RenderMultiScattering(CommandBuffer cmd, in AtmosphereParameters parameters)
@@ -219,6 +292,7 @@ namespace Atmosphere.Runtime
             currentTransmittanceHash = parameters.TransmittanceHash;
             currentMultiScatteringHash = parameters.MultiScatteringHash;
             currentSkyViewHash = int.MinValue;
+            currentAerialPerspectiveHash = int.MinValue;
             LogBuild(parameters, "multi-scattering", parameters.MultiScatteringWidth, parameters.MultiScatteringHeight);
         }
 
@@ -227,6 +301,7 @@ namespace Atmosphere.Runtime
             currentTransmittanceHash = parameters.TransmittanceHash;
             currentMultiScatteringHash = parameters.MultiScatteringHash;
             currentSkyViewHash = int.MinValue;
+            currentAerialPerspectiveHash = int.MinValue;
         }
 
         public void RenderSkyView(CommandBuffer cmd, in AtmosphereParameters parameters, in AtmosphereViewParameters viewParameters)
@@ -250,6 +325,7 @@ namespace Atmosphere.Runtime
             currentMultiScatteringHash = parameters.MultiScatteringHash;
             currentSkyViewHash = parameters.SkyViewHash;
             currentSkyViewDynamicHash = viewParameters.DynamicHash;
+            currentAerialPerspectiveHash = int.MinValue;
             LogBuild(parameters, "sky-view", parameters.SkyViewWidth, parameters.SkyViewHeight);
         }
 
@@ -259,6 +335,42 @@ namespace Atmosphere.Runtime
             currentMultiScatteringHash = parameters.MultiScatteringHash;
             currentSkyViewHash = parameters.SkyViewHash;
             currentSkyViewDynamicHash = viewParameters.DynamicHash;
+            currentAerialPerspectiveHash = int.MinValue;
+        }
+
+        public void RenderAerialPerspective(CommandBuffer cmd, in AtmosphereParameters parameters, in AtmosphereViewParameters viewParameters)
+        {
+            if (!EnsureTransmittanceResources(parameters)
+                || !EnsureMultiScatteringResources(parameters)
+                || !EnsureAerialPerspectiveResources(parameters))
+                return;
+
+            ApplyCommonParameters(cmd, aerialPerspectiveComputeShader, parameters);
+            ApplyAerialPerspectiveParameters(cmd, aerialPerspectiveComputeShader, parameters, viewParameters);
+            cmd.SetComputeTextureParam(aerialPerspectiveComputeShader, aerialPerspectiveKernelIndex, AtmosphereShaderIDs.TransmittanceLut, transmittanceTexture);
+            cmd.SetComputeTextureParam(aerialPerspectiveComputeShader, aerialPerspectiveKernelIndex, AtmosphereShaderIDs.MultiScatteringLut, multiScatteringTexture);
+            cmd.SetComputeTextureParam(aerialPerspectiveComputeShader, aerialPerspectiveKernelIndex, AtmosphereShaderIDs.AerialScatteringLut, aerialScatteringTexture);
+            cmd.SetComputeTextureParam(aerialPerspectiveComputeShader, aerialPerspectiveKernelIndex, AtmosphereShaderIDs.AerialTransmittanceLut, aerialTransmittanceTexture);
+            cmd.DispatchCompute(
+                aerialPerspectiveComputeShader,
+                aerialPerspectiveKernelIndex,
+                Mathf.CeilToInt(parameters.AerialPerspectiveWidth / 8.0f),
+                Mathf.CeilToInt(parameters.AerialPerspectiveHeight / 8.0f),
+                1);
+
+            currentTransmittanceHash = parameters.TransmittanceHash;
+            currentMultiScatteringHash = parameters.MultiScatteringHash;
+            currentAerialPerspectiveHash = parameters.AerialPerspectiveHash;
+            currentAerialPerspectiveDynamicHash = viewParameters.DynamicHash;
+            LogBuild(parameters, "aerial-perspective", parameters.AerialPerspectiveWidth, parameters.AerialPerspectiveHeight);
+        }
+
+        public void MarkAerialPerspectiveRendered(in AtmosphereParameters parameters, in AtmosphereViewParameters viewParameters)
+        {
+            currentTransmittanceHash = parameters.TransmittanceHash;
+            currentMultiScatteringHash = parameters.MultiScatteringHash;
+            currentAerialPerspectiveHash = parameters.AerialPerspectiveHash;
+            currentAerialPerspectiveDynamicHash = viewParameters.DynamicHash;
         }
 
         public void BindGlobals(CommandBuffer cmd, in AtmosphereParameters parameters)
@@ -298,6 +410,28 @@ namespace Atmosphere.Runtime
                         1.0f / parameters.SkyViewWidth,
                         1.0f / parameters.SkyViewHeight));
             }
+
+            if (aerialScatteringTexture != null)
+            {
+                cmd.SetGlobalTexture(AtmosphereShaderIDs.AerialScatteringLut, aerialScatteringTexture);
+            }
+
+            if (aerialTransmittanceTexture != null)
+            {
+                cmd.SetGlobalTexture(AtmosphereShaderIDs.AerialTransmittanceLut, aerialTransmittanceTexture);
+            }
+
+            if (aerialScatteringTexture != null || aerialTransmittanceTexture != null)
+            {
+                cmd.SetGlobalVector(
+                    AtmosphereShaderIDs.AerialPerspectiveSize,
+                    new Vector4(
+                        parameters.AerialPerspectiveWidth,
+                        parameters.AerialPerspectiveHeight,
+                        parameters.AerialPerspectiveDepth,
+                        1.0f / parameters.AerialPerspectiveDepth));
+                cmd.SetGlobalFloat(AtmosphereShaderIDs.AerialPerspectiveMaxDistanceKm, parameters.AerialPerspectiveMaxDistanceKm);
+            }
         }
 
         public void Release()
@@ -305,20 +439,27 @@ namespace Atmosphere.Runtime
             ReleaseTextures(ref transmittanceTexture, ref transmittanceHandle);
             ReleaseTextures(ref multiScatteringTexture, ref multiScatteringHandle);
             ReleaseTextures(ref skyViewTexture, ref skyViewHandle);
+            ReleaseTextures(ref aerialScatteringTexture, ref aerialScatteringHandle);
+            ReleaseTextures(ref aerialTransmittanceTexture, ref aerialTransmittanceHandle);
             transmittanceComputeShader = null;
             multiScatteringComputeShader = null;
             skyViewComputeShader = null;
+            aerialPerspectiveComputeShader = null;
             transmittanceKernelIndex = -1;
             multiScatteringKernelIndex = -1;
             skyViewKernelIndex = -1;
+            aerialPerspectiveKernelIndex = -1;
             currentTransmittanceHash = int.MinValue;
             currentMultiScatteringHash = int.MinValue;
             currentSkyViewHash = int.MinValue;
             currentSkyViewDynamicHash = int.MinValue;
+            currentAerialPerspectiveHash = int.MinValue;
+            currentAerialPerspectiveDynamicHash = int.MinValue;
             loggedBuildInfo = false;
             loggedMissingTransmittanceShader = false;
             loggedMissingMultiScatteringShader = false;
             loggedMissingSkyViewShader = false;
+            loggedMissingAerialPerspectiveShader = false;
         }
 
         private void EnsureTexture(ref RenderTexture texture, ref RTHandle handle, int width, int height, string name)
@@ -336,6 +477,31 @@ namespace Atmosphere.Runtime
                 name = name,
                 enableRandomWrite = true,
                 dimension = TextureDimension.Tex2D,
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp,
+                useMipMap = false,
+                autoGenerateMips = false,
+            };
+            texture.Create();
+            handle = RTHandles.Alloc(texture, false);
+        }
+
+        private void EnsureVolumeTexture(ref RenderTexture texture, ref RTHandle handle, int width, int height, int depth, string name)
+        {
+            if (texture != null && (texture.width != width || texture.height != height || texture.volumeDepth != depth))
+            {
+                ReleaseTextures(ref texture, ref handle);
+            }
+
+            if (texture != null && handle != null)
+                return;
+
+            texture = new RenderTexture(width, height, 0, RenderTextureFormat.ARGBHalf, RenderTextureReadWrite.Linear)
+            {
+                name = name,
+                enableRandomWrite = true,
+                dimension = TextureDimension.Tex3D,
+                volumeDepth = depth,
                 filterMode = FilterMode.Bilinear,
                 wrapMode = TextureWrapMode.Clamp,
                 useMipMap = false,
@@ -379,6 +545,18 @@ namespace Atmosphere.Runtime
                 skyViewKernelIndex = skyViewComputeShader.FindKernel(KernelName);
 
             return skyViewComputeShader;
+        }
+
+        private ComputeShader LoadAerialPerspectiveComputeShader()
+        {
+            if (aerialPerspectiveComputeShader != null)
+                return aerialPerspectiveComputeShader;
+
+            aerialPerspectiveComputeShader = Resources.Load<ComputeShader>(AerialPerspectiveComputeShaderPath);
+            if (aerialPerspectiveComputeShader != null)
+                aerialPerspectiveKernelIndex = aerialPerspectiveComputeShader.FindKernel(KernelName);
+
+            return aerialPerspectiveComputeShader;
         }
 
         private void ApplyCommonParameters(CommandBuffer cmd, ComputeShader shader, in AtmosphereParameters parameters)
@@ -436,6 +614,66 @@ namespace Atmosphere.Runtime
             cmd.SetComputeVectorParam(shader, AtmosphereShaderIDs.CameraBasisForward, viewParameters.CameraBasisForward);
         }
 
+        public static void ApplyAerialPerspectiveParameters(CommandBuffer cmd, ComputeShader shader, in AtmosphereParameters parameters, in AtmosphereViewParameters viewParameters)
+        {
+            cmd.SetComputeVectorParam(
+                shader,
+                AtmosphereShaderIDs.MultiScatteringSize,
+                new Vector4(
+                    parameters.MultiScatteringWidth,
+                    parameters.MultiScatteringHeight,
+                    1.0f / parameters.MultiScatteringWidth,
+                    1.0f / parameters.MultiScatteringHeight));
+            cmd.SetComputeVectorParam(
+                shader,
+                AtmosphereShaderIDs.AerialPerspectiveSize,
+                new Vector4(
+                    parameters.AerialPerspectiveWidth,
+                    parameters.AerialPerspectiveHeight,
+                    parameters.AerialPerspectiveDepth,
+                    1.0f / parameters.AerialPerspectiveDepth));
+            cmd.SetComputeFloatParam(shader, AtmosphereShaderIDs.AerialPerspectiveMaxDistanceKm, parameters.AerialPerspectiveMaxDistanceKm);
+            cmd.SetComputeVectorParam(shader, AtmosphereShaderIDs.SunDirection, viewParameters.SunDirection);
+            cmd.SetComputeVectorParam(shader, AtmosphereShaderIDs.SunIlluminance, viewParameters.SunIlluminance);
+            cmd.SetComputeFloatParam(shader, AtmosphereShaderIDs.MiePhaseG, parameters.MiePhaseG);
+            cmd.SetComputeVectorParam(shader, AtmosphereShaderIDs.CameraPositionKm, viewParameters.CameraPositionKm);
+            cmd.SetComputeVectorParam(shader, AtmosphereShaderIDs.CameraBasisRight, viewParameters.CameraBasisRight);
+            cmd.SetComputeVectorParam(shader, AtmosphereShaderIDs.CameraBasisUp, viewParameters.CameraBasisUp);
+            cmd.SetComputeVectorParam(shader, AtmosphereShaderIDs.CameraBasisForward, viewParameters.CameraBasisForward);
+            cmd.SetComputeFloatParam(shader, AtmosphereShaderIDs.CameraTanHalfVerticalFov, viewParameters.TanHalfVerticalFov);
+            cmd.SetComputeFloatParam(shader, AtmosphereShaderIDs.CameraAspectRatio, viewParameters.AspectRatio);
+        }
+
+        public static void ApplyAerialPerspectiveParameters(ComputeCommandBuffer cmd, ComputeShader shader, in AtmosphereParameters parameters, in AtmosphereViewParameters viewParameters)
+        {
+            cmd.SetComputeVectorParam(
+                shader,
+                AtmosphereShaderIDs.MultiScatteringSize,
+                new Vector4(
+                    parameters.MultiScatteringWidth,
+                    parameters.MultiScatteringHeight,
+                    1.0f / parameters.MultiScatteringWidth,
+                    1.0f / parameters.MultiScatteringHeight));
+            cmd.SetComputeVectorParam(
+                shader,
+                AtmosphereShaderIDs.AerialPerspectiveSize,
+                new Vector4(
+                    parameters.AerialPerspectiveWidth,
+                    parameters.AerialPerspectiveHeight,
+                    parameters.AerialPerspectiveDepth,
+                    1.0f / parameters.AerialPerspectiveDepth));
+            cmd.SetComputeFloatParam(shader, AtmosphereShaderIDs.AerialPerspectiveMaxDistanceKm, parameters.AerialPerspectiveMaxDistanceKm);
+            cmd.SetComputeVectorParam(shader, AtmosphereShaderIDs.SunDirection, viewParameters.SunDirection);
+            cmd.SetComputeVectorParam(shader, AtmosphereShaderIDs.SunIlluminance, viewParameters.SunIlluminance);
+            cmd.SetComputeFloatParam(shader, AtmosphereShaderIDs.MiePhaseG, parameters.MiePhaseG);
+            cmd.SetComputeVectorParam(shader, AtmosphereShaderIDs.CameraPositionKm, viewParameters.CameraPositionKm);
+            cmd.SetComputeVectorParam(shader, AtmosphereShaderIDs.CameraBasisRight, viewParameters.CameraBasisRight);
+            cmd.SetComputeVectorParam(shader, AtmosphereShaderIDs.CameraBasisUp, viewParameters.CameraBasisUp);
+            cmd.SetComputeVectorParam(shader, AtmosphereShaderIDs.CameraBasisForward, viewParameters.CameraBasisForward);
+            cmd.SetComputeFloatParam(shader, AtmosphereShaderIDs.CameraTanHalfVerticalFov, viewParameters.TanHalfVerticalFov);
+            cmd.SetComputeFloatParam(shader, AtmosphereShaderIDs.CameraAspectRatio, viewParameters.AspectRatio);
+        }
+
         public static void ApplySkyViewParameters(ComputeCommandBuffer cmd, ComputeShader shader, in AtmosphereParameters parameters, in AtmosphereViewParameters viewParameters)
         {
             cmd.SetComputeVectorParam(
@@ -473,6 +711,48 @@ namespace Atmosphere.Runtime
             cmd.SetGlobalVector(AtmosphereShaderIDs.CameraBasisRight, viewParameters.CameraBasisRight);
             cmd.SetGlobalVector(AtmosphereShaderIDs.CameraBasisUp, viewParameters.CameraBasisUp);
             cmd.SetGlobalVector(AtmosphereShaderIDs.CameraBasisForward, viewParameters.CameraBasisForward);
+        }
+
+        public static void BindAerialPerspectiveGlobals(CommandBuffer cmd, in AtmosphereParameters parameters, in AtmosphereViewParameters viewParameters)
+        {
+            cmd.SetGlobalVector(
+                AtmosphereShaderIDs.AerialPerspectiveSize,
+                new Vector4(
+                    parameters.AerialPerspectiveWidth,
+                    parameters.AerialPerspectiveHeight,
+                    parameters.AerialPerspectiveDepth,
+                    1.0f / parameters.AerialPerspectiveDepth));
+            cmd.SetGlobalFloat(AtmosphereShaderIDs.AerialPerspectiveMaxDistanceKm, parameters.AerialPerspectiveMaxDistanceKm);
+            cmd.SetGlobalVector(AtmosphereShaderIDs.SunDirection, viewParameters.SunDirection);
+            cmd.SetGlobalVector(AtmosphereShaderIDs.SunIlluminance, viewParameters.SunIlluminance);
+            cmd.SetGlobalFloat(AtmosphereShaderIDs.MiePhaseG, parameters.MiePhaseG);
+            cmd.SetGlobalVector(AtmosphereShaderIDs.CameraPositionKm, viewParameters.CameraPositionKm);
+            cmd.SetGlobalVector(AtmosphereShaderIDs.CameraBasisRight, viewParameters.CameraBasisRight);
+            cmd.SetGlobalVector(AtmosphereShaderIDs.CameraBasisUp, viewParameters.CameraBasisUp);
+            cmd.SetGlobalVector(AtmosphereShaderIDs.CameraBasisForward, viewParameters.CameraBasisForward);
+            cmd.SetGlobalFloat(AtmosphereShaderIDs.CameraTanHalfVerticalFov, viewParameters.TanHalfVerticalFov);
+            cmd.SetGlobalFloat(AtmosphereShaderIDs.CameraAspectRatio, viewParameters.AspectRatio);
+        }
+
+        public static void BindAerialPerspectiveGlobals(RasterCommandBuffer cmd, in AtmosphereParameters parameters, in AtmosphereViewParameters viewParameters)
+        {
+            cmd.SetGlobalVector(
+                AtmosphereShaderIDs.AerialPerspectiveSize,
+                new Vector4(
+                    parameters.AerialPerspectiveWidth,
+                    parameters.AerialPerspectiveHeight,
+                    parameters.AerialPerspectiveDepth,
+                    1.0f / parameters.AerialPerspectiveDepth));
+            cmd.SetGlobalFloat(AtmosphereShaderIDs.AerialPerspectiveMaxDistanceKm, parameters.AerialPerspectiveMaxDistanceKm);
+            cmd.SetGlobalVector(AtmosphereShaderIDs.SunDirection, viewParameters.SunDirection);
+            cmd.SetGlobalVector(AtmosphereShaderIDs.SunIlluminance, viewParameters.SunIlluminance);
+            cmd.SetGlobalFloat(AtmosphereShaderIDs.MiePhaseG, parameters.MiePhaseG);
+            cmd.SetGlobalVector(AtmosphereShaderIDs.CameraPositionKm, viewParameters.CameraPositionKm);
+            cmd.SetGlobalVector(AtmosphereShaderIDs.CameraBasisRight, viewParameters.CameraBasisRight);
+            cmd.SetGlobalVector(AtmosphereShaderIDs.CameraBasisUp, viewParameters.CameraBasisUp);
+            cmd.SetGlobalVector(AtmosphereShaderIDs.CameraBasisForward, viewParameters.CameraBasisForward);
+            cmd.SetGlobalFloat(AtmosphereShaderIDs.CameraTanHalfVerticalFov, viewParameters.TanHalfVerticalFov);
+            cmd.SetGlobalFloat(AtmosphereShaderIDs.CameraAspectRatio, viewParameters.AspectRatio);
         }
 
         public static void BindSkyViewGlobals(RasterCommandBuffer cmd, in AtmosphereParameters parameters, in AtmosphereViewParameters viewParameters)

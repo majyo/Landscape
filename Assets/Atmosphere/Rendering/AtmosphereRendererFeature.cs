@@ -1,5 +1,6 @@
 using Atmosphere.Runtime;
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 
 namespace Atmosphere.Rendering
@@ -8,10 +9,14 @@ namespace Atmosphere.Rendering
     {
         [SerializeField] private RenderPassEvent renderPassEvent = RenderPassEvent.BeforeRenderingSkybox;
         [SerializeField] private bool runInSceneView = true;
+        [SerializeField] private Shader aerialCompositeShader;
 
         private AtmosphereTransmittancePass transmittancePass;
         private AtmosphereMultiScatteringPass multiScatteringPass;
         private AtmosphereSkyViewPass skyViewPass;
+        private AtmosphereAerialPerspectivePass aerialPerspectivePass;
+        private AtmosphereAerialCompositePass aerialCompositePass;
+        private Material aerialCompositeMaterial;
 
         public override void Create()
         {
@@ -29,11 +34,27 @@ namespace Atmosphere.Rendering
             {
                 renderPassEvent = renderPassEvent
             };
+
+            aerialPerspectivePass = new AtmosphereAerialPerspectivePass
+            {
+                renderPassEvent = renderPassEvent
+            };
+
+            if (aerialCompositeShader == null)
+                aerialCompositeShader = Shader.Find("Hidden/Landscape/AtmosphereAerialComposite");
+
+            if (aerialCompositeShader != null)
+                aerialCompositeMaterial = CoreUtils.CreateEngineMaterial(aerialCompositeShader);
+
+            aerialCompositePass = new AtmosphereAerialCompositePass(aerialCompositeMaterial)
+            {
+                renderPassEvent = RenderPassEvent.BeforeRenderingTransparents
+            };
         }
 
         public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
         {
-            if (transmittancePass == null || multiScatteringPass == null || skyViewPass == null)
+            if (transmittancePass == null || multiScatteringPass == null || skyViewPass == null || aerialPerspectivePass == null || aerialCompositePass == null)
                 Create();
 
             CameraType cameraType = renderingData.cameraData.cameraType;
@@ -49,6 +70,15 @@ namespace Atmosphere.Rendering
             renderer.EnqueuePass(transmittancePass);
             renderer.EnqueuePass(multiScatteringPass);
             renderer.EnqueuePass(skyViewPass);
+            renderer.EnqueuePass(aerialPerspectivePass);
+            renderer.EnqueuePass(aerialCompositePass);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            aerialCompositePass?.Dispose();
+            CoreUtils.Destroy(aerialCompositeMaterial);
+            aerialCompositeMaterial = null;
         }
     }
 }

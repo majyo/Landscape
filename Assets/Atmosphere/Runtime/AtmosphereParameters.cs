@@ -25,11 +25,16 @@ namespace Atmosphere.Runtime
         public int SkyViewWidth;
         public int SkyViewHeight;
         public int SkyViewRaySteps;
+        public int AerialPerspectiveWidth;
+        public int AerialPerspectiveHeight;
+        public int AerialPerspectiveDepth;
+        public float AerialPerspectiveMaxDistanceKm;
         public Vector3 SunIlluminance;
         public float MiePhaseG;
         public int TransmittanceHash;
         public int MultiScatteringHash;
         public int SkyViewHash;
+        public int AerialPerspectiveHash;
 
         public static AtmosphereParameters FromProfile(AtmosphereProfile profile)
         {
@@ -56,6 +61,10 @@ namespace Atmosphere.Runtime
                 SkyViewWidth = Mathf.Max(1, profile.skyViewWidth),
                 SkyViewHeight = Mathf.Max(1, profile.skyViewHeight),
                 SkyViewRaySteps = Mathf.Max(1, profile.skyViewRaySteps),
+                AerialPerspectiveWidth = Mathf.Max(1, profile.aerialPerspectiveWidth),
+                AerialPerspectiveHeight = Mathf.Max(1, profile.aerialPerspectiveHeight),
+                AerialPerspectiveDepth = Mathf.Max(1, profile.aerialPerspectiveDepth),
+                AerialPerspectiveMaxDistanceKm = Mathf.Max(0.001f, profile.aerialPerspectiveMaxDistanceKm),
                 SunIlluminance = profile.sunIlluminance,
                 MiePhaseG = Mathf.Clamp(profile.miePhaseG, 0.0f, 0.99f),
             };
@@ -63,6 +72,7 @@ namespace Atmosphere.Runtime
             parameters.TransmittanceHash = ComputeTransmittanceHash(parameters);
             parameters.MultiScatteringHash = ComputeMultiScatteringHash(parameters);
             parameters.SkyViewHash = ComputeSkyViewHash(parameters);
+            parameters.AerialPerspectiveHash = ComputeAerialPerspectiveHash(parameters);
             return parameters;
         }
 
@@ -120,6 +130,23 @@ namespace Atmosphere.Runtime
                 hash = (hash * 31) + parameters.SkyViewWidth;
                 hash = (hash * 31) + parameters.SkyViewHeight;
                 hash = (hash * 31) + parameters.SkyViewRaySteps;
+                hash = (hash * 31) + Quantize(parameters.SunIlluminance.x);
+                hash = (hash * 31) + Quantize(parameters.SunIlluminance.y);
+                hash = (hash * 31) + Quantize(parameters.SunIlluminance.z);
+                hash = (hash * 31) + Quantize(parameters.MiePhaseG);
+                return hash;
+            }
+        }
+
+        private static int ComputeAerialPerspectiveHash(AtmosphereParameters parameters)
+        {
+            unchecked
+            {
+                int hash = parameters.MultiScatteringHash;
+                hash = (hash * 31) + parameters.AerialPerspectiveWidth;
+                hash = (hash * 31) + parameters.AerialPerspectiveHeight;
+                hash = (hash * 31) + parameters.AerialPerspectiveDepth;
+                hash = (hash * 31) + Quantize(parameters.AerialPerspectiveMaxDistanceKm);
                 hash = (hash * 31) + Quantize(parameters.SunIlluminance.x);
                 hash = (hash * 31) + Quantize(parameters.SunIlluminance.y);
                 hash = (hash * 31) + Quantize(parameters.SunIlluminance.z);

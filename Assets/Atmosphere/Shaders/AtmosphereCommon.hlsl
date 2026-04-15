@@ -190,6 +190,29 @@ float2 DirectionToSkyViewUv(float3 direction, float3 sunDirection, float3 basisR
     return saturate(float2(frac(u), v));
 }
 
+float3 GetCameraRayDirection(float2 uv, float tanHalfVerticalFov, float aspectRatio, float3 basisRight, float3 basisUp, float3 basisForward)
+{
+    float2 ndc = uv * 2.0 - 1.0;
+    float3 ray = basisForward
+        + basisRight * (ndc.x * tanHalfVerticalFov * aspectRatio)
+        + basisUp * (ndc.y * tanHalfVerticalFov);
+    return normalize(ray);
+}
+
+float SliceToDistanceKm(float normalizedZ, float maxDistanceKm)
+{
+    float clampedZ = saturate(normalizedZ);
+    return clampedZ * clampedZ * maxDistanceKm;
+}
+
+float DistanceToSliceNormalized(float distanceKm, float maxDistanceKm)
+{
+    if (maxDistanceKm <= 1e-4)
+        return 0.0;
+
+    return saturate(sqrt(max(distanceKm, 0.0) / maxDistanceKm));
+}
+
 float3 GetFibonacciSphereDirection(uint sampleIndex, uint sampleCount)
 {
     float phi = 2.0 * PI * frac((float)sampleIndex / kAtmosphereFibonacciGoldenRatio);

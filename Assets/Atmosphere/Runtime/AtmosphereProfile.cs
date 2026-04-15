@@ -42,6 +42,12 @@ namespace Atmosphere.Runtime
         public Vector3 sunIlluminance = new Vector3(1.0f, 1.0f, 1.0f);
         [Range(0.0f, 0.99f)] public float miePhaseG = 0.8f;
 
+        [Header("Aerial Perspective LUT")]
+        [Min(1)] public int aerialPerspectiveWidth = 32;
+        [Min(1)] public int aerialPerspectiveHeight = 32;
+        [Min(1)] public int aerialPerspectiveDepth = 32;
+        [Min(0.001f)] public float aerialPerspectiveMaxDistanceKm = 32.0f;
+
         private void OnValidate()
         {
             topRadiusKm = Mathf.Max(topRadiusKm, groundRadiusKm + 1.0f);
@@ -58,6 +64,10 @@ namespace Atmosphere.Runtime
             skyViewWidth = Mathf.Max(1, skyViewWidth);
             skyViewHeight = Mathf.Max(1, skyViewHeight);
             skyViewRaySteps = Mathf.Max(1, skyViewRaySteps);
+            aerialPerspectiveWidth = Mathf.Max(1, aerialPerspectiveWidth);
+            aerialPerspectiveHeight = Mathf.Max(1, aerialPerspectiveHeight);
+            aerialPerspectiveDepth = Mathf.Max(1, aerialPerspectiveDepth);
+            aerialPerspectiveMaxDistanceKm = Mathf.Max(0.001f, aerialPerspectiveMaxDistanceKm);
             miePhaseG = Mathf.Clamp(miePhaseG, 0.0f, 0.99f);
         }
     }

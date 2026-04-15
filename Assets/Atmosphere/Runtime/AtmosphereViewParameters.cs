@@ -10,6 +10,8 @@ namespace Atmosphere.Runtime
         public readonly Vector4 CameraBasisForward;
         public readonly Vector4 SunDirection;
         public readonly Vector4 SunIlluminance;
+        public readonly float TanHalfVerticalFov;
+        public readonly float AspectRatio;
         public readonly int DynamicHash;
 
         public AtmosphereViewParameters(
@@ -18,7 +20,9 @@ namespace Atmosphere.Runtime
             Vector3 cameraBasisUp,
             Vector3 cameraBasisForward,
             Vector3 sunDirection,
-            Vector3 sunIlluminance)
+            Vector3 sunIlluminance,
+            float tanHalfVerticalFov,
+            float aspectRatio)
         {
             CameraPositionKm = cameraPositionKm;
             CameraBasisRight = cameraBasisRight;
@@ -26,7 +30,9 @@ namespace Atmosphere.Runtime
             CameraBasisForward = cameraBasisForward;
             SunDirection = sunDirection;
             SunIlluminance = sunIlluminance;
-            DynamicHash = ComputeDynamicHash(cameraPositionKm, cameraBasisRight, cameraBasisUp, cameraBasisForward, sunDirection, sunIlluminance);
+            TanHalfVerticalFov = tanHalfVerticalFov;
+            AspectRatio = aspectRatio;
+            DynamicHash = ComputeDynamicHash(cameraPositionKm, cameraBasisRight, cameraBasisUp, cameraBasisForward, sunDirection, sunIlluminance, tanHalfVerticalFov, aspectRatio);
         }
 
         private static int ComputeDynamicHash(
@@ -35,7 +41,9 @@ namespace Atmosphere.Runtime
             Vector3 cameraBasisUp,
             Vector3 cameraBasisForward,
             Vector3 sunDirection,
-            Vector3 sunIlluminance)
+            Vector3 sunIlluminance,
+            float tanHalfVerticalFov,
+            float aspectRatio)
         {
             unchecked
             {
@@ -46,6 +54,8 @@ namespace Atmosphere.Runtime
                 hash = AppendVector(hash, cameraBasisForward, 100000.0f);
                 hash = AppendVector(hash, sunDirection, 100000.0f);
                 hash = AppendVector(hash, sunIlluminance, 100000.0f);
+                hash = (hash * 31) + Mathf.RoundToInt(tanHalfVerticalFov * 100000.0f);
+                hash = (hash * 31) + Mathf.RoundToInt(aspectRatio * 100000.0f);
                 return hash;
             }
         }
