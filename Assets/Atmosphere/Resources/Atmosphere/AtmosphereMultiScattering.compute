@@ -2,8 +2,8 @@
 
 #include "../../Shaders/AtmosphereCommon.hlsl"
 
-TEXTURE2D(_AtmosphereTransmittanceLut);
-SAMPLER(sampler_AtmosphereTransmittanceLut);
+Texture2D _AtmosphereTransmittanceLut;
+SamplerState sampler_AtmosphereTransmittanceLut;
 RWTexture2D<float4> _AtmosphereMultiScatteringLut;
 
 float _AtmosphereGroundRadiusKm;
