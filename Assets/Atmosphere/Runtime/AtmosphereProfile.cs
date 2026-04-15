@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Landscape.Atmosphere
+namespace Atmosphere.Runtime
 {
     [CreateAssetMenu(fileName = "AtmosphereProfile", menuName = "Rendering/Atmosphere Profile")]
     public sealed class AtmosphereProfile : ScriptableObject
@@ -35,6 +35,13 @@ namespace Landscape.Atmosphere
         [Min(1)] public int multiScatteringSphereSamples = 64;
         [Min(1)] public int multiScatteringRaySteps = 20;
 
+        [Header("Sky-View LUT")]
+        [Min(1)] public int skyViewWidth = 200;
+        [Min(1)] public int skyViewHeight = 100;
+        [Min(1)] public int skyViewRaySteps = 30;
+        public Vector3 sunIlluminance = new Vector3(1.0f, 1.0f, 1.0f);
+        [Range(0.0f, 0.99f)] public float miePhaseG = 0.8f;
+
         private void OnValidate()
         {
             topRadiusKm = Mathf.Max(topRadiusKm, groundRadiusKm + 1.0f);
@@ -48,6 +55,10 @@ namespace Landscape.Atmosphere
             multiScatteringHeight = Mathf.Max(1, multiScatteringHeight);
             multiScatteringSphereSamples = Mathf.Max(1, multiScatteringSphereSamples);
             multiScatteringRaySteps = Mathf.Max(1, multiScatteringRaySteps);
+            skyViewWidth = Mathf.Max(1, skyViewWidth);
+            skyViewHeight = Mathf.Max(1, skyViewHeight);
+            skyViewRaySteps = Mathf.Max(1, skyViewRaySteps);
+            miePhaseG = Mathf.Clamp(miePhaseG, 0.0f, 0.99f);
         }
     }
 }

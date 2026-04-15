@@ -1,7 +1,8 @@
+using Atmosphere.Runtime;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
 
-namespace Landscape.Atmosphere
+namespace Atmosphere.Rendering
 {
     public sealed class AtmosphereRendererFeature : ScriptableRendererFeature
     {
@@ -10,6 +11,7 @@ namespace Landscape.Atmosphere
 
         private AtmosphereTransmittancePass transmittancePass;
         private AtmosphereMultiScatteringPass multiScatteringPass;
+        private AtmosphereSkyViewPass skyViewPass;
 
         public override void Create()
         {
@@ -22,11 +24,16 @@ namespace Landscape.Atmosphere
             {
                 renderPassEvent = renderPassEvent
             };
+
+            skyViewPass = new AtmosphereSkyViewPass
+            {
+                renderPassEvent = renderPassEvent
+            };
         }
 
         public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
         {
-            if (transmittancePass == null)
+            if (transmittancePass == null || multiScatteringPass == null || skyViewPass == null)
                 Create();
 
             CameraType cameraType = renderingData.cameraData.cameraType;
@@ -41,6 +48,7 @@ namespace Landscape.Atmosphere
 
             renderer.EnqueuePass(transmittancePass);
             renderer.EnqueuePass(multiScatteringPass);
+            renderer.EnqueuePass(skyViewPass);
         }
     }
 }

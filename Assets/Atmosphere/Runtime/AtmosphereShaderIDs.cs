@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Landscape.Atmosphere
+namespace Atmosphere.Runtime
 {
     public static class AtmosphereShaderIDs
     {
@@ -20,5 +20,16 @@ namespace Landscape.Atmosphere
         public static readonly int GroundAlbedo = Shader.PropertyToID("_AtmosphereGroundAlbedo");
         public static readonly int MultiScatteringSphereSamples = Shader.PropertyToID("_AtmosphereMultiScatteringSphereSamples");
         public static readonly int MultiScatteringRaySteps = Shader.PropertyToID("_AtmosphereMultiScatteringRaySteps");
+        public static readonly int SkyViewLut = Shader.PropertyToID("_AtmosphereSkyViewLut");
+        public static readonly int SkyViewSize = Shader.PropertyToID("_AtmosphereSkyViewSize");
+        public static readonly int SkyViewRaySteps = Shader.PropertyToID("_AtmosphereSkyViewRaySteps");
+        public static readonly int SunDirection = Shader.PropertyToID("_AtmosphereSunDirection");
+        public static readonly int SunIlluminance = Shader.PropertyToID("_AtmosphereSunIlluminance");
+        public static readonly int MiePhaseG = Shader.PropertyToID("_AtmosphereMiePhaseG");
+        public static readonly int CameraPositionKm = Shader.PropertyToID("_AtmosphereCameraPositionKm");
+        public static readonly int CameraBasisRight = Shader.PropertyToID("_AtmosphereCameraBasisRight");
+        public static readonly int CameraBasisUp = Shader.PropertyToID("_AtmosphereCameraBasisUp");
+        public static readonly int CameraBasisForward = Shader.PropertyToID("_AtmosphereCameraBasisForward");
+        public static readonly int CameraSkyViewMatrix = Shader.PropertyToID("_AtmosphereCameraSkyViewMatrix");
     }
 }

@@ -1,9 +1,10 @@
+using Atmosphere.Runtime;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.RenderGraphModule;
 using UnityEngine.Rendering.Universal;
 
-namespace Landscape.Atmosphere
+namespace Atmosphere.Rendering
 {
     public sealed class AtmosphereMultiScatteringPass : ScriptableRenderPass
     {
@@ -114,6 +115,7 @@ namespace Landscape.Atmosphere
                             Mathf.CeilToInt(data.parameters.MultiScatteringWidth / 8.0f),
                             Mathf.CeilToInt(data.parameters.MultiScatteringHeight / 8.0f),
                             1);
+                        AtmosphereController.Instance?.MarkMultiScatteringRendered(data.parameters);
                     });
                 }
             }

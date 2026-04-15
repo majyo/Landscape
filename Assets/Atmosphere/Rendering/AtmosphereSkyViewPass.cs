@@ -6,12 +6,12 @@ using UnityEngine.Rendering.Universal;
 
 namespace Atmosphere.Rendering
 {
-    public sealed class AtmosphereTransmittancePass : ScriptableRenderPass
+    public sealed class AtmosphereSkyViewPass : ScriptableRenderPass
     {
-        private const string ProfilingName = "Atmosphere Transmittance LUT";
+        private const string ProfilingName = "Atmosphere Sky-View LUT";
         private static readonly ProfilingSampler ProfilingSampler = new ProfilingSampler(ProfilingName);
 
-        public AtmosphereTransmittancePass()
+        public AtmosphereSkyViewPass()
         {
             profilingSampler = ProfilingSampler;
         }
@@ -21,16 +21,19 @@ namespace Atmosphere.Rendering
         public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
         {
             AtmosphereController controller = AtmosphereController.Instance;
-            if (controller == null || !controller.TryPrepareForRender(out AtmosphereParameters parameters))
+            if (controller == null || !controller.TryPrepareForSkyView(renderingData.cameraData.camera, out AtmosphereParameters parameters, out AtmosphereViewParameters viewParameters))
+                return;
+
+            if (controller.TransmittanceHandle == null || controller.MultiScatteringHandle == null)
                 return;
 
             CommandBuffer cmd = CommandBufferPool.Get(ProfilingName);
             using (new ProfilingScope(cmd, ProfilingSampler))
             {
-                if (controller.NeedsTransmittanceRebuild(parameters))
-                    controller.RenderTransmittance(cmd, parameters);
+                if (controller.NeedsSkyViewRebuild(parameters, viewParameters))
+                    controller.RenderSkyView(cmd, parameters, viewParameters);
                 else
-                    controller.BindGlobals(cmd, parameters);
+                    controller.BindSkyViewGlobals(cmd, parameters, viewParameters);
             }
 
             context.ExecuteCommandBuffer(cmd);
@@ -40,19 +43,22 @@ namespace Atmosphere.Rendering
 
         public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData)
         {
+            UniversalCameraData cameraData = frameData.Get<UniversalCameraData>();
             AtmosphereController controller = AtmosphereController.Instance;
-            if (controller == null || !controller.TryPrepareForRender(out AtmosphereParameters parameters))
+            if (controller == null || !controller.TryPrepareForSkyView(cameraData.camera, out AtmosphereParameters parameters, out AtmosphereViewParameters viewParameters))
                 return;
 
-            if (controller.TransmittanceHandle == null)
+            if (controller.TransmittanceHandle == null || controller.MultiScatteringHandle == null || controller.SkyViewHandle == null)
                 return;
 
             TextureHandle transmittanceHandle = renderGraph.ImportTexture(controller.TransmittanceHandle);
+            TextureHandle multiScatteringHandle = renderGraph.ImportTexture(controller.MultiScatteringHandle);
+            TextureHandle skyViewHandle = renderGraph.ImportTexture(controller.SkyViewHandle);
 
-            if (controller.NeedsTransmittanceRebuild(parameters))
+            if (controller.NeedsSkyViewRebuild(parameters, viewParameters))
             {
-                ComputeShader computeShader = controller.TransmittanceComputeShader;
-                int kernelIndex = controller.TransmittanceKernelIndex;
+                ComputeShader computeShader = controller.SkyViewComputeShader;
+                int kernelIndex = controller.SkyViewKernelIndex;
                 if (computeShader == null || kernelIndex < 0)
                     return;
 
@@ -60,9 +66,14 @@ namespace Atmosphere.Rendering
                 {
                     passData.computeShader = computeShader;
                     passData.kernelIndex = kernelIndex;
-                    passData.output = transmittanceHandle;
+                    passData.transmittance = transmittanceHandle;
+                    passData.multiScattering = multiScatteringHandle;
+                    passData.output = skyViewHandle;
                     passData.parameters = parameters;
+                    passData.viewParameters = viewParameters;
 
+                    builder.UseTexture(passData.transmittance, AccessFlags.Read);
+                    builder.UseTexture(passData.multiScattering, AccessFlags.Read);
                     builder.UseTexture(passData.output, AccessFlags.WriteAll);
                     builder.AllowPassCulling(false);
                     builder.SetRenderFunc(static (ComputePassData data, ComputeGraphContext context) =>
@@ -90,38 +101,44 @@ namespace Atmosphere.Rendering
                                 1.0f / data.parameters.TransmittanceWidth,
                                 1.0f / data.parameters.TransmittanceHeight));
                         context.cmd.SetComputeIntParam(data.computeShader, AtmosphereShaderIDs.TransmittanceSteps, data.parameters.TransmittanceSteps);
-                        context.cmd.SetComputeTextureParam(data.computeShader, data.kernelIndex, AtmosphereShaderIDs.TransmittanceLut, data.output);
+                        AtmosphereLutManager.ApplySkyViewParameters(context.cmd, data.computeShader, data.parameters, data.viewParameters);
+                        context.cmd.SetComputeTextureParam(data.computeShader, data.kernelIndex, AtmosphereShaderIDs.TransmittanceLut, data.transmittance);
+                        context.cmd.SetComputeTextureParam(data.computeShader, data.kernelIndex, AtmosphereShaderIDs.MultiScatteringLut, data.multiScattering);
+                        context.cmd.SetComputeTextureParam(data.computeShader, data.kernelIndex, AtmosphereShaderIDs.SkyViewLut, data.output);
                         context.cmd.DispatchCompute(
                             data.computeShader,
                             data.kernelIndex,
-                            Mathf.CeilToInt(data.parameters.TransmittanceWidth / 8.0f),
-                            Mathf.CeilToInt(data.parameters.TransmittanceHeight / 8.0f),
+                            Mathf.CeilToInt(data.parameters.SkyViewWidth / 8.0f),
+                            Mathf.CeilToInt(data.parameters.SkyViewHeight / 8.0f),
                             1);
-                        AtmosphereController.Instance?.MarkTransmittanceRendered(data.parameters);
+                        AtmosphereController.Instance?.MarkSkyViewRendered(data.parameters, data.viewParameters);
                     });
                 }
             }
 
-            AddBindGlobalsPass(renderGraph, transmittanceHandle, parameters);
+            AddBindGlobalsPass(renderGraph, skyViewHandle, parameters, viewParameters);
         }
 
-        private static void AddBindGlobalsPass(RenderGraph renderGraph, TextureHandle textureHandle, in AtmosphereParameters parameters)
+        private static void AddBindGlobalsPass(RenderGraph renderGraph, TextureHandle textureHandle, in AtmosphereParameters parameters, in AtmosphereViewParameters viewParameters)
         {
-            using (var builder = renderGraph.AddRasterRenderPass<BindGlobalsPassData>("Atmosphere Bind Globals", out BindGlobalsPassData passData))
+            using (var builder = renderGraph.AddRasterRenderPass<BindGlobalsPassData>("Atmosphere Bind Sky-View Globals", out BindGlobalsPassData passData))
             {
-                passData.transmittanceSize = new Vector4(
-                    parameters.TransmittanceWidth,
-                    parameters.TransmittanceHeight,
-                    1.0f / parameters.TransmittanceWidth,
-                    1.0f / parameters.TransmittanceHeight);
+                passData.skyViewSize = new Vector4(
+                    parameters.SkyViewWidth,
+                    parameters.SkyViewHeight,
+                    1.0f / parameters.SkyViewWidth,
+                    1.0f / parameters.SkyViewHeight);
+                passData.parameters = parameters;
+                passData.viewParameters = viewParameters;
 
                 builder.UseTexture(textureHandle, AccessFlags.Read);
                 builder.AllowPassCulling(false);
                 builder.AllowGlobalStateModification(true);
-                builder.SetGlobalTextureAfterPass(textureHandle, AtmosphereShaderIDs.TransmittanceLut);
+                builder.SetGlobalTextureAfterPass(textureHandle, AtmosphereShaderIDs.SkyViewLut);
                 builder.SetRenderFunc(static (BindGlobalsPassData data, RasterGraphContext context) =>
                 {
-                    context.cmd.SetGlobalVector(AtmosphereShaderIDs.TransmittanceSize, data.transmittanceSize);
+                    context.cmd.SetGlobalVector(AtmosphereShaderIDs.SkyViewSize, data.skyViewSize);
+                    AtmosphereLutManager.BindSkyViewGlobals(context.cmd, data.parameters, data.viewParameters);
                 });
             }
         }
@@ -130,13 +147,18 @@ namespace Atmosphere.Rendering
         {
             public ComputeShader computeShader;
             public int kernelIndex;
+            public TextureHandle transmittance;
+            public TextureHandle multiScattering;
             public TextureHandle output;
             public AtmosphereParameters parameters;
+            public AtmosphereViewParameters viewParameters;
         }
 
         private sealed class BindGlobalsPassData
         {
-            public Vector4 transmittanceSize;
+            public Vector4 skyViewSize;
+            public AtmosphereParameters parameters;
+            public AtmosphereViewParameters viewParameters;
         }
     }
 }

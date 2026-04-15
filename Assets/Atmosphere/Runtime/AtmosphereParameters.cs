@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace Landscape.Atmosphere
+namespace Atmosphere.Runtime
 {
     public struct AtmosphereParameters
     {
@@ -22,8 +22,14 @@ namespace Landscape.Atmosphere
         public int MultiScatteringHeight;
         public int MultiScatteringSphereSamples;
         public int MultiScatteringRaySteps;
+        public int SkyViewWidth;
+        public int SkyViewHeight;
+        public int SkyViewRaySteps;
+        public Vector3 SunIlluminance;
+        public float MiePhaseG;
         public int TransmittanceHash;
         public int MultiScatteringHash;
+        public int SkyViewHash;
 
         public static AtmosphereParameters FromProfile(AtmosphereProfile profile)
         {
@@ -47,10 +53,16 @@ namespace Landscape.Atmosphere
                 MultiScatteringHeight = Mathf.Max(1, profile.multiScatteringHeight),
                 MultiScatteringSphereSamples = Mathf.Max(1, profile.multiScatteringSphereSamples),
                 MultiScatteringRaySteps = Mathf.Max(1, profile.multiScatteringRaySteps),
+                SkyViewWidth = Mathf.Max(1, profile.skyViewWidth),
+                SkyViewHeight = Mathf.Max(1, profile.skyViewHeight),
+                SkyViewRaySteps = Mathf.Max(1, profile.skyViewRaySteps),
+                SunIlluminance = profile.sunIlluminance,
+                MiePhaseG = Mathf.Clamp(profile.miePhaseG, 0.0f, 0.99f),
             };
 
             parameters.TransmittanceHash = ComputeTransmittanceHash(parameters);
             parameters.MultiScatteringHash = ComputeMultiScatteringHash(parameters);
+            parameters.SkyViewHash = ComputeSkyViewHash(parameters);
             return parameters;
         }
 
@@ -96,6 +108,22 @@ namespace Landscape.Atmosphere
                 hash = (hash * 31) + parameters.MultiScatteringHeight;
                 hash = (hash * 31) + parameters.MultiScatteringSphereSamples;
                 hash = (hash * 31) + parameters.MultiScatteringRaySteps;
+                return hash;
+            }
+        }
+
+        private static int ComputeSkyViewHash(AtmosphereParameters parameters)
+        {
+            unchecked
+            {
+                int hash = parameters.MultiScatteringHash;
+                hash = (hash * 31) + parameters.SkyViewWidth;
+                hash = (hash * 31) + parameters.SkyViewHeight;
+                hash = (hash * 31) + parameters.SkyViewRaySteps;
+                hash = (hash * 31) + Quantize(parameters.SunIlluminance.x);
+                hash = (hash * 31) + Quantize(parameters.SunIlluminance.y);
+                hash = (hash * 31) + Quantize(parameters.SunIlluminance.z);
+                hash = (hash * 31) + Quantize(parameters.MiePhaseG);
                 return hash;
             }
         }

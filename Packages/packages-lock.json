@@ -98,7 +98,8 @@
         "com.unity.collections": "2.4.3",
         "com.unity.modules.physics": "1.0.0",
         "com.unity.modules.terrain": "1.0.0",
-        "com.unity.modules.jsonserialize": "1.0.0"
+        "com.unity.modules.jsonserialize": "1.0.0",
+        "com.unity.rendering.light-transport": "1.0.2"
       }
     },
     "com.unity.render-pipelines.universal": {
@@ -117,6 +118,16 @@
       "source": "builtin",
       "dependencies": {
         "com.unity.render-pipelines.core": "17.0.3"
+      }
+    },
+    "com.unity.rendering.light-transport": {
+      "version": "1.0.2",
+      "depth": 2,
+      "source": "builtin",
+      "dependencies": {
+        "com.unity.collections": "2.2.0",
+        "com.unity.mathematics": "1.2.4",
+        "com.unity.modules.terrain": "1.0.0"
       }
     },
     "com.unity.searcher": {

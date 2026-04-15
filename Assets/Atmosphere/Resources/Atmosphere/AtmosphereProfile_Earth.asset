@@ -30,3 +30,8 @@ MonoBehaviour:
   multiScatteringHeight: 32
   multiScatteringSphereSamples: 64
   multiScatteringRaySteps: 20
+  skyViewWidth: 200
+  skyViewHeight: 100
+  skyViewRaySteps: 30
+  sunIlluminance: {x: 1, y: 1, z: 1}
+  miePhaseG: 0.8

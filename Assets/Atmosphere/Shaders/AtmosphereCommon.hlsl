@@ -2,10 +2,16 @@
 #define LANDSCAPE_ATMOSPHERE_COMMON_INCLUDED
 
 static const float kAtmosphereTransmittanceDistanceScale = 1.05;
-static const float PI = 3.14159265359;
-static const float INV_PI = 0.31830988618;
-static const float INV_FOUR_PI = 0.07957747154;
-static const float FIBONACCI_GOLDEN_RATIO = 1.61803398875;
+#ifndef PI
+#define PI 3.14159265359
+#endif
+#ifndef INV_PI
+#define INV_PI 0.31830988618
+#endif
+#ifndef INV_FOUR_PI
+#define INV_FOUR_PI 0.07957747154
+#endif
+static const float kAtmosphereFibonacciGoldenRatio = 1.61803398875;
 
 float RaySphereIntersectNearest(float3 origin, float3 direction, float radius)
 {
@@ -122,9 +128,71 @@ float3 SampleTransmittanceLut(
     return SampleTransmittanceLut(lut, lutSampler, radiusKm, cosTheta, groundRadiusKm, topRadiusKm);
 }
 
+float2 MultiScatteringParametersToUv(float radiusKm, float cosSunZenith, float groundRadiusKm, float topRadiusKm)
+{
+    float u = cosSunZenith * 0.5 + 0.5;
+    float v = (radiusKm - groundRadiusKm) / max(topRadiusKm - groundRadiusKm, 1e-4);
+    return saturate(float2(u, v));
+}
+
+float3 SampleMultiScatteringLut(
+    Texture2D lut,
+    SamplerState lutSampler,
+    float radiusKm,
+    float cosSunZenith,
+    float groundRadiusKm,
+    float topRadiusKm)
+{
+    float2 uv = MultiScatteringParametersToUv(radiusKm, cosSunZenith, groundRadiusKm, topRadiusKm);
+    return lut.SampleLevel(lutSampler, uv, 0).rgb;
+}
+
+float PhaseRayleigh(float cosTheta)
+{
+    return (3.0 / (16.0 * PI)) * (1.0 + cosTheta * cosTheta);
+}
+
+float PhaseMieCornetteShanks(float cosTheta, float g)
+{
+    float g2 = g * g;
+    float denominator = max(pow(max(1.0 + g2 - 2.0 * g * cosTheta, 1e-4), 1.5), 1e-4);
+    return (3.0 * (1.0 - g2) * (1.0 + cosTheta * cosTheta)) / (8.0 * PI * (2.0 + g2) * denominator);
+}
+
+float SkyViewElevationToV(float elevation)
+{
+    float normalizedElevation = clamp(elevation / (PI * 0.5), -1.0, 1.0);
+    return 0.5 + 0.5 * sign(normalizedElevation) * sqrt(abs(normalizedElevation));
+}
+
+float SkyViewVToElevation(float v)
+{
+    float adjustedV = v - 0.5;
+    float signV = adjustedV < 0.0 ? -1.0 : 1.0;
+    float vSquared = adjustedV * adjustedV * 4.0;
+    return signV * vSquared * (PI * 0.5);
+}
+
+float2 DirectionToSkyViewUv(float3 direction, float3 sunDirection, float3 basisRight, float3 basisUp, float3 basisForward)
+{
+    float x = dot(direction, basisRight);
+    float y = dot(direction, basisUp);
+    float z = dot(direction, basisForward);
+    float elevation = asin(clamp(y, -1.0, 1.0));
+    float azimuth = atan2(x, z);
+
+    float sunX = dot(sunDirection, basisRight);
+    float sunZ = dot(sunDirection, basisForward);
+    float sunAzimuth = atan2(sunX, sunZ);
+    float relativeAzimuth = atan2(sin(azimuth - sunAzimuth), cos(azimuth - sunAzimuth));
+    float u = relativeAzimuth / (2.0 * PI) + 0.5;
+    float v = SkyViewElevationToV(elevation);
+    return saturate(float2(frac(u), v));
+}
+
 float3 GetFibonacciSphereDirection(uint sampleIndex, uint sampleCount)
 {
-    float phi = 2.0 * PI * frac((float)sampleIndex / FIBONACCI_GOLDEN_RATIO);
+    float phi = 2.0 * PI * frac((float)sampleIndex / kAtmosphereFibonacciGoldenRatio);
     float cosTheta = 1.0 - (2.0 * (float)sampleIndex + 1.0) / (float)sampleCount;
     float sinTheta = sqrt(saturate(1.0 - cosTheta * cosTheta));
     return float3(cos(phi) * sinTheta, cosTheta, sin(phi) * sinTheta);
