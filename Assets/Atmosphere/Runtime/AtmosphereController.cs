@@ -12,6 +12,11 @@ namespace Atmosphere.Runtime
         private const float OverlayPaddingLeft = 8.0f;
         private const float OverlayPaddingRight = 8.0f;
         private const float OverlayPaddingTop = 6.0f;
+        private const float OverlayPaddingBottom = 8.0f;
+        private const float OverlayTitleHeight = 20.0f;
+        private const float OverlayMetadataSpacing = 4.0f;
+        private const float OverlayMetadataHeight = 18.0f;
+        private const float OverlaySectionSpacing = 6.0f;
         private static AtmosphereController instance;
 
         [SerializeField] private AtmosphereProfile profile;
@@ -315,8 +320,13 @@ namespace Atmosphere.Runtime
                 Shader.SetGlobalFloat(AtmosphereShaderIDs.AerialPerspectiveMaxDistanceKm, parameters.AerialPerspectiveMaxDistanceKm);
             }
 
+            Shader.SetGlobalFloat(AtmosphereShaderIDs.GroundRadiusKm, parameters.GroundRadiusKm);
+            Shader.SetGlobalFloat(AtmosphereShaderIDs.TopRadiusKm, parameters.TopRadiusKm);
             Shader.SetGlobalVector(AtmosphereShaderIDs.SunDirection, viewParameters.SunDirection);
             Shader.SetGlobalVector(AtmosphereShaderIDs.SunIlluminance, viewParameters.SunIlluminance);
+            Shader.SetGlobalVector(AtmosphereShaderIDs.SunDiskParams, AtmosphereLutManager.BuildSunDiskParams(parameters));
+            Shader.SetGlobalFloat(AtmosphereShaderIDs.SkyExposure, parameters.SkyExposure);
+            Shader.SetGlobalFloat(AtmosphereShaderIDs.AerialPerspectiveExposure, parameters.AerialPerspectiveExposure);
             Shader.SetGlobalFloat(AtmosphereShaderIDs.MiePhaseG, parameters.MiePhaseG);
             Shader.SetGlobalVector(AtmosphereShaderIDs.CameraPositionKm, viewParameters.CameraPositionKm);
             Shader.SetGlobalVector(AtmosphereShaderIDs.CameraBasisRight, viewParameters.CameraBasisRight);
@@ -352,18 +362,23 @@ namespace Atmosphere.Runtime
 
             EnsureOverlayStyles();
 
-            float width = Mathf.Max(128.0f, debugOverlaySize.x);
+            float maxPanelWidth = Mathf.Max(128.0f, Screen.width - 32.0f - OverlayPaddingLeft - OverlayPaddingRight);
+            float width = Mathf.Min(Mathf.Max(128.0f, debugOverlaySize.x), maxPanelWidth);
             float height = Mathf.Max(32.0f, debugOverlaySize.y);
-            float blockHeight = height + 24.0f;
+            float blockHeight = OverlayTitleHeight + height + OverlayMetadataSpacing + OverlayMetadataHeight;
             int blockCount = (texture != null ? 1 : 0)
                 + (multiScatteringTexture != null ? 1 : 0)
                 + (skyViewTexture != null ? 1 : 0)
                 + (aerialScatteringTexture != null ? 1 : 0)
                 + (aerialTransmittanceTexture != null ? 1 : 0);
-            Rect panelRect = new Rect(16.0f, 16.0f, width + OverlayPaddingLeft + OverlayPaddingRight, blockCount * blockHeight + 20.0f);
+            float panelHeight = OverlayPaddingTop
+                + blockCount * blockHeight
+                + Mathf.Max(0, blockCount - 1) * OverlaySectionSpacing
+                + OverlayPaddingBottom;
+            Rect panelRect = new Rect(16.0f, 16.0f, width + OverlayPaddingLeft + OverlayPaddingRight, panelHeight);
             GUI.Box(panelRect, GUIContent.none);
 
-            float cursorY = panelRect.y + 8.0f;
+            float cursorY = panelRect.y + OverlayPaddingTop;
             if (texture != null)
             {
                 DrawOverlayTexture(panelRect.x, ref cursorY, width, height, texture, "Atmosphere Transmittance LUT");
@@ -392,15 +407,18 @@ namespace Atmosphere.Runtime
 
         private void DrawOverlayTexture(float panelX, ref float cursorY, float width, float height, RenderTexture texture, string label)
         {
+            Rect titleRect = new Rect(panelX + OverlayPaddingLeft, cursorY, width, OverlayTitleHeight);
             Rect textureRect = new Rect(
                 panelX + OverlayPaddingLeft,
-                cursorY + 20.0f,
+                titleRect.yMax,
                 width,
                 height);
-            GUI.Label(new Rect(panelX + 8.0f, cursorY, width, 20.0f), label, overlayTitleStyle);
+            Rect metadataRect = new Rect(textureRect.x, textureRect.yMax + OverlayMetadataSpacing, textureRect.width, OverlayMetadataHeight);
+
+            GUI.Label(titleRect, label, overlayTitleStyle);
             GUI.DrawTexture(textureRect, texture, ScaleMode.StretchToFill, false);
-            GUI.Label(new Rect(textureRect.x, textureRect.yMax + 4.0f, textureRect.width, 18.0f), $"{texture.width}x{texture.height} ARGBHalf", overlayLabelStyle);
-            cursorY = textureRect.yMax + 24.0f;
+            GUI.Label(metadataRect, $"{texture.width}x{texture.height} ARGBHalf", overlayLabelStyle);
+            cursorY = metadataRect.yMax + OverlaySectionSpacing;
         }
 
         private void EnsureOverlayStyles()
@@ -466,7 +484,8 @@ namespace Atmosphere.Runtime
             Vector3 forward = Vector3.Cross(up, right).normalized;
 
             Vector3 sunDirection = GetSunDirection();
-            Vector3 sunIlluminance = parameters.SunIlluminance * GetSunIntensityScale();
+            Vector3 sunColorScale = GetSunColorScale(parameters);
+            Vector3 sunIlluminance = Vector3.Scale(parameters.SunIlluminance, sunColorScale) * (GetSunIntensityScale() * parameters.SunIntensityMultiplier);
             float verticalFovRadians = Mathf.Deg2Rad * Mathf.Max(1.0f, camera.fieldOfView);
             float tanHalfVerticalFov = Mathf.Tan(verticalFovRadians * 0.5f);
             float aspectRatio = camera.aspect > 0.0f ? camera.aspect : 1.0f;
@@ -487,6 +506,21 @@ namespace Atmosphere.Runtime
                 return 1.0f;
 
             return Mathf.Max(0.0f, mainLight.intensity);
+        }
+
+        private Vector3 GetSunColorScale(in AtmosphereParameters parameters)
+        {
+            if (!parameters.UseDirectionalLightColor || mainLight == null || mainLight.type != LightType.Directional)
+                return Vector3.one;
+
+            Color linearColor = mainLight.color.linear;
+            if (mainLight.useColorTemperature)
+                linearColor *= Mathf.CorrelatedColorTemperatureToRGB(mainLight.colorTemperature);
+
+            return new Vector3(
+                Mathf.Max(0.0f, linearColor.r),
+                Mathf.Max(0.0f, linearColor.g),
+                Mathf.Max(0.0f, linearColor.b));
         }
 
         private void UpdateAerialPerspectiveDebugTextures()

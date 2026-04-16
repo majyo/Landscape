@@ -40,13 +40,24 @@ namespace Atmosphere.Runtime
         [Min(1)] public int skyViewHeight = 100;
         [Min(1)] public int skyViewRaySteps = 30;
         public Vector3 sunIlluminance = new Vector3(1.0f, 1.0f, 1.0f);
+        public bool useDirectionalLightColor = true;
+        [Min(0.0f)] public float sunIntensityMultiplier = 4.0f;
         [Range(0.0f, 0.99f)] public float miePhaseG = 0.8f;
+
+        [Header("Sun Disk")]
+        [Min(0.0f)] public float sunAngularRadiusDegrees = 0.266f;
+        [Min(0.0f)] public float sunDiskEdgeSoftnessDegrees = 0.03f;
+        [Min(0.0f)] public float sunDiskIntensityMultiplier = 1.0f;
 
         [Header("Aerial Perspective LUT")]
         [Min(1)] public int aerialPerspectiveWidth = 32;
         [Min(1)] public int aerialPerspectiveHeight = 32;
         [Min(1)] public int aerialPerspectiveDepth = 32;
         [Min(0.001f)] public float aerialPerspectiveMaxDistanceKm = 32.0f;
+
+        [Header("Exposure")]
+        [Min(0.001f)] public float skyExposure = 1.0f;
+        [Min(0.001f)] public float aerialPerspectiveExposure = 1.0f;
 
         private void OnValidate()
         {
@@ -64,10 +75,16 @@ namespace Atmosphere.Runtime
             skyViewWidth = Mathf.Max(1, skyViewWidth);
             skyViewHeight = Mathf.Max(1, skyViewHeight);
             skyViewRaySteps = Mathf.Max(1, skyViewRaySteps);
+            sunAngularRadiusDegrees = Mathf.Clamp(sunAngularRadiusDegrees, 0.0f, 45.0f);
+            sunDiskEdgeSoftnessDegrees = Mathf.Max(0.0f, sunDiskEdgeSoftnessDegrees);
+            sunDiskIntensityMultiplier = Mathf.Max(0.0f, sunDiskIntensityMultiplier);
             aerialPerspectiveWidth = Mathf.Max(1, aerialPerspectiveWidth);
             aerialPerspectiveHeight = Mathf.Max(1, aerialPerspectiveHeight);
             aerialPerspectiveDepth = Mathf.Max(1, aerialPerspectiveDepth);
             aerialPerspectiveMaxDistanceKm = Mathf.Max(0.001f, aerialPerspectiveMaxDistanceKm);
+            sunIntensityMultiplier = Mathf.Max(0.0f, sunIntensityMultiplier);
+            skyExposure = Mathf.Max(0.001f, skyExposure);
+            aerialPerspectiveExposure = Mathf.Max(0.001f, aerialPerspectiveExposure);
             miePhaseG = Mathf.Clamp(miePhaseG, 0.0f, 0.99f);
         }
     }

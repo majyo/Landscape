@@ -375,6 +375,12 @@ namespace Atmosphere.Runtime
 
         public void BindGlobals(CommandBuffer cmd, in AtmosphereParameters parameters)
         {
+            cmd.SetGlobalFloat(AtmosphereShaderIDs.GroundRadiusKm, parameters.GroundRadiusKm);
+            cmd.SetGlobalFloat(AtmosphereShaderIDs.TopRadiusKm, parameters.TopRadiusKm);
+            cmd.SetGlobalVector(AtmosphereShaderIDs.SunDiskParams, BuildSunDiskParams(parameters));
+            cmd.SetGlobalFloat(AtmosphereShaderIDs.SkyExposure, parameters.SkyExposure);
+            cmd.SetGlobalFloat(AtmosphereShaderIDs.AerialPerspectiveExposure, parameters.AerialPerspectiveExposure);
+
             if (transmittanceTexture != null)
             {
                 cmd.SetGlobalTexture(AtmosphereShaderIDs.TransmittanceLut, transmittanceTexture);
@@ -704,8 +710,12 @@ namespace Atmosphere.Runtime
 
         public static void BindSkyViewGlobals(CommandBuffer cmd, in AtmosphereParameters parameters, in AtmosphereViewParameters viewParameters)
         {
+            cmd.SetGlobalFloat(AtmosphereShaderIDs.GroundRadiusKm, parameters.GroundRadiusKm);
+            cmd.SetGlobalFloat(AtmosphereShaderIDs.TopRadiusKm, parameters.TopRadiusKm);
             cmd.SetGlobalVector(AtmosphereShaderIDs.SunDirection, viewParameters.SunDirection);
             cmd.SetGlobalVector(AtmosphereShaderIDs.SunIlluminance, viewParameters.SunIlluminance);
+            cmd.SetGlobalVector(AtmosphereShaderIDs.SunDiskParams, BuildSunDiskParams(parameters));
+            cmd.SetGlobalFloat(AtmosphereShaderIDs.SkyExposure, parameters.SkyExposure);
             cmd.SetGlobalFloat(AtmosphereShaderIDs.MiePhaseG, parameters.MiePhaseG);
             cmd.SetGlobalVector(AtmosphereShaderIDs.CameraPositionKm, viewParameters.CameraPositionKm);
             cmd.SetGlobalVector(AtmosphereShaderIDs.CameraBasisRight, viewParameters.CameraBasisRight);
@@ -715,6 +725,8 @@ namespace Atmosphere.Runtime
 
         public static void BindAerialPerspectiveGlobals(CommandBuffer cmd, in AtmosphereParameters parameters, in AtmosphereViewParameters viewParameters)
         {
+            cmd.SetGlobalFloat(AtmosphereShaderIDs.GroundRadiusKm, parameters.GroundRadiusKm);
+            cmd.SetGlobalFloat(AtmosphereShaderIDs.TopRadiusKm, parameters.TopRadiusKm);
             cmd.SetGlobalVector(
                 AtmosphereShaderIDs.AerialPerspectiveSize,
                 new Vector4(
@@ -725,6 +737,8 @@ namespace Atmosphere.Runtime
             cmd.SetGlobalFloat(AtmosphereShaderIDs.AerialPerspectiveMaxDistanceKm, parameters.AerialPerspectiveMaxDistanceKm);
             cmd.SetGlobalVector(AtmosphereShaderIDs.SunDirection, viewParameters.SunDirection);
             cmd.SetGlobalVector(AtmosphereShaderIDs.SunIlluminance, viewParameters.SunIlluminance);
+            cmd.SetGlobalVector(AtmosphereShaderIDs.SunDiskParams, BuildSunDiskParams(parameters));
+            cmd.SetGlobalFloat(AtmosphereShaderIDs.AerialPerspectiveExposure, parameters.AerialPerspectiveExposure);
             cmd.SetGlobalFloat(AtmosphereShaderIDs.MiePhaseG, parameters.MiePhaseG);
             cmd.SetGlobalVector(AtmosphereShaderIDs.CameraPositionKm, viewParameters.CameraPositionKm);
             cmd.SetGlobalVector(AtmosphereShaderIDs.CameraBasisRight, viewParameters.CameraBasisRight);
@@ -736,6 +750,8 @@ namespace Atmosphere.Runtime
 
         public static void BindAerialPerspectiveGlobals(RasterCommandBuffer cmd, in AtmosphereParameters parameters, in AtmosphereViewParameters viewParameters)
         {
+            cmd.SetGlobalFloat(AtmosphereShaderIDs.GroundRadiusKm, parameters.GroundRadiusKm);
+            cmd.SetGlobalFloat(AtmosphereShaderIDs.TopRadiusKm, parameters.TopRadiusKm);
             cmd.SetGlobalVector(
                 AtmosphereShaderIDs.AerialPerspectiveSize,
                 new Vector4(
@@ -746,6 +762,8 @@ namespace Atmosphere.Runtime
             cmd.SetGlobalFloat(AtmosphereShaderIDs.AerialPerspectiveMaxDistanceKm, parameters.AerialPerspectiveMaxDistanceKm);
             cmd.SetGlobalVector(AtmosphereShaderIDs.SunDirection, viewParameters.SunDirection);
             cmd.SetGlobalVector(AtmosphereShaderIDs.SunIlluminance, viewParameters.SunIlluminance);
+            cmd.SetGlobalVector(AtmosphereShaderIDs.SunDiskParams, BuildSunDiskParams(parameters));
+            cmd.SetGlobalFloat(AtmosphereShaderIDs.AerialPerspectiveExposure, parameters.AerialPerspectiveExposure);
             cmd.SetGlobalFloat(AtmosphereShaderIDs.MiePhaseG, parameters.MiePhaseG);
             cmd.SetGlobalVector(AtmosphereShaderIDs.CameraPositionKm, viewParameters.CameraPositionKm);
             cmd.SetGlobalVector(AtmosphereShaderIDs.CameraBasisRight, viewParameters.CameraBasisRight);
@@ -757,13 +775,27 @@ namespace Atmosphere.Runtime
 
         public static void BindSkyViewGlobals(RasterCommandBuffer cmd, in AtmosphereParameters parameters, in AtmosphereViewParameters viewParameters)
         {
+            cmd.SetGlobalFloat(AtmosphereShaderIDs.GroundRadiusKm, parameters.GroundRadiusKm);
+            cmd.SetGlobalFloat(AtmosphereShaderIDs.TopRadiusKm, parameters.TopRadiusKm);
             cmd.SetGlobalVector(AtmosphereShaderIDs.SunDirection, viewParameters.SunDirection);
             cmd.SetGlobalVector(AtmosphereShaderIDs.SunIlluminance, viewParameters.SunIlluminance);
+            cmd.SetGlobalVector(AtmosphereShaderIDs.SunDiskParams, BuildSunDiskParams(parameters));
+            cmd.SetGlobalFloat(AtmosphereShaderIDs.SkyExposure, parameters.SkyExposure);
             cmd.SetGlobalFloat(AtmosphereShaderIDs.MiePhaseG, parameters.MiePhaseG);
             cmd.SetGlobalVector(AtmosphereShaderIDs.CameraPositionKm, viewParameters.CameraPositionKm);
             cmd.SetGlobalVector(AtmosphereShaderIDs.CameraBasisRight, viewParameters.CameraBasisRight);
             cmd.SetGlobalVector(AtmosphereShaderIDs.CameraBasisUp, viewParameters.CameraBasisUp);
             cmd.SetGlobalVector(AtmosphereShaderIDs.CameraBasisForward, viewParameters.CameraBasisForward);
+        }
+
+        public static Vector4 BuildSunDiskParams(in AtmosphereParameters parameters)
+        {
+            float angularRadius = Mathf.Max(0.0f, parameters.SunAngularRadiusRadians);
+            float edgeSoftness = Mathf.Max(0.0f, parameters.SunDiskEdgeSoftnessRadians);
+            float outerRadius = angularRadius + edgeSoftness;
+            float cosAngularRadius = angularRadius > 0.0f ? Mathf.Cos(angularRadius) : 2.0f;
+            float cosSoftOuterRadius = outerRadius > 0.0f ? Mathf.Cos(outerRadius) : 1.0f;
+            return new Vector4(cosAngularRadius, cosSoftOuterRadius, parameters.SunDiskIntensityMultiplier, angularRadius);
         }
 
         private void ReleaseTextures(ref RenderTexture texture, ref RTHandle handle)

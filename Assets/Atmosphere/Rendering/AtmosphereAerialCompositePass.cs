@@ -80,6 +80,8 @@ namespace Atmosphere.Rendering
             Shader.SetGlobalFloat(AtmosphereShaderIDs.AerialPerspectiveMaxDistanceKm, parameters.AerialPerspectiveMaxDistanceKm);
             Shader.SetGlobalVector(AtmosphereShaderIDs.SunDirection, viewParameters.SunDirection);
             Shader.SetGlobalVector(AtmosphereShaderIDs.SunIlluminance, viewParameters.SunIlluminance);
+            Shader.SetGlobalFloat(AtmosphereShaderIDs.SkyExposure, parameters.SkyExposure);
+            Shader.SetGlobalFloat(AtmosphereShaderIDs.AerialPerspectiveExposure, parameters.AerialPerspectiveExposure);
             Shader.SetGlobalFloat(AtmosphereShaderIDs.MiePhaseG, parameters.MiePhaseG);
             Shader.SetGlobalVector(AtmosphereShaderIDs.CameraPositionKm, viewParameters.CameraPositionKm);
             Shader.SetGlobalVector(AtmosphereShaderIDs.CameraBasisRight, viewParameters.CameraBasisRight);
@@ -95,9 +97,7 @@ namespace Atmosphere.Rendering
 
             RenderGraphUtils.BlitMaterialParameters compositeParameters = new(source, temp, compositeMaterial, 0);
             renderGraph.AddBlitPass(compositeParameters, ProfilingName);
-
-            RenderGraphUtils.BlitMaterialParameters copyBackParameters = new(temp, source, null, 0);
-            renderGraph.AddBlitPass(copyBackParameters, "Atmosphere Aerial Composite Copy Back");
+            renderGraph.AddBlitPass(temp, source, Vector2.one, Vector2.zero, passName: "Atmosphere Aerial Composite Copy Back");
         }
 
         public void Dispose()

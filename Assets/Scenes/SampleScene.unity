@@ -480,6 +480,8 @@ MonoBehaviour:
   mainLight: {fileID: 410087040}
   showDebugOverlay: 1
   debugOverlaySize: {x: 384, y: 128}
+  showAerialPerspectiveDebug: 1
+  aerialDebugSlice: 0.5
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

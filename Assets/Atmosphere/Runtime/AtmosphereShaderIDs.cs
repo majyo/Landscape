@@ -29,6 +29,9 @@ namespace Atmosphere.Runtime
         public static readonly int AerialPerspectiveMaxDistanceKm = Shader.PropertyToID("_AtmosphereAerialPerspectiveMaxDistanceKm");
         public static readonly int SunDirection = Shader.PropertyToID("_AtmosphereSunDirection");
         public static readonly int SunIlluminance = Shader.PropertyToID("_AtmosphereSunIlluminance");
+        public static readonly int SunDiskParams = Shader.PropertyToID("_AtmosphereSunDiskParams");
+        public static readonly int SkyExposure = Shader.PropertyToID("_AtmosphereSkyExposure");
+        public static readonly int AerialPerspectiveExposure = Shader.PropertyToID("_AtmosphereAerialPerspectiveExposure");
         public static readonly int MiePhaseG = Shader.PropertyToID("_AtmosphereMiePhaseG");
         public static readonly int CameraPositionKm = Shader.PropertyToID("_AtmosphereCameraPositionKm");
         public static readonly int CameraBasisRight = Shader.PropertyToID("_AtmosphereCameraBasisRight");

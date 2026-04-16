@@ -29,6 +29,8 @@ Shader "Hidden/Landscape/AtmosphereAerialComposite"
 
             float4 _AtmosphereAerialPerspectiveSize;
             float _AtmosphereAerialPerspectiveMaxDistanceKm;
+            float _AtmosphereSkyExposure;
+            float _AtmosphereAerialPerspectiveExposure;
             float3 _AtmosphereSunDirection;
             float3 _AtmosphereCameraBasisRight;
             float3 _AtmosphereCameraBasisUp;
@@ -57,7 +59,7 @@ Shader "Hidden/Landscape/AtmosphereAerialComposite"
                 float normalizedZ = DistanceToSliceNormalized(distanceKm, _AtmosphereAerialPerspectiveMaxDistanceKm);
                 float3 uvw = float3(uv, normalizedZ);
 
-                float3 aerialScattering = SAMPLE_TEXTURE3D(_AtmosphereAerialScatteringLut, sampler_AtmosphereAerialScatteringLut, uvw).rgb;
+                float3 aerialScattering = SAMPLE_TEXTURE3D(_AtmosphereAerialScatteringLut, sampler_AtmosphereAerialScatteringLut, uvw).rgb * _AtmosphereAerialPerspectiveExposure;
                 float3 aerialTransmittance = SAMPLE_TEXTURE3D(_AtmosphereAerialTransmittanceLut, sampler_AtmosphereAerialTransmittanceLut, uvw).rgb;
 
                 float3 rayDirection = GetCameraRayDirection(
@@ -73,7 +75,7 @@ Shader "Hidden/Landscape/AtmosphereAerialComposite"
                     normalize(_AtmosphereCameraBasisRight),
                     normalize(_AtmosphereCameraBasisUp),
                     normalize(_AtmosphereCameraBasisForward));
-                float3 skyColor = SAMPLE_TEXTURE2D(_AtmosphereSkyViewLut, sampler_AtmosphereSkyViewLut, skyUv).rgb;
+                float3 skyColor = SAMPLE_TEXTURE2D(_AtmosphereSkyViewLut, sampler_AtmosphereSkyViewLut, skyUv).rgb * _AtmosphereSkyExposure;
 
                 float farBlend = saturate((distanceKm - _AtmosphereAerialPerspectiveMaxDistanceKm * 0.85) / max(_AtmosphereAerialPerspectiveMaxDistanceKm * 0.15, 1e-4));
                 aerialScattering = lerp(aerialScattering, skyColor, farBlend);

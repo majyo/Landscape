@@ -30,7 +30,14 @@ namespace Atmosphere.Runtime
         public int AerialPerspectiveDepth;
         public float AerialPerspectiveMaxDistanceKm;
         public Vector3 SunIlluminance;
+        public bool UseDirectionalLightColor;
+        public float SunIntensityMultiplier;
         public float MiePhaseG;
+        public float SunAngularRadiusRadians;
+        public float SunDiskEdgeSoftnessRadians;
+        public float SunDiskIntensityMultiplier;
+        public float SkyExposure;
+        public float AerialPerspectiveExposure;
         public int TransmittanceHash;
         public int MultiScatteringHash;
         public int SkyViewHash;
@@ -66,7 +73,14 @@ namespace Atmosphere.Runtime
                 AerialPerspectiveDepth = Mathf.Max(1, profile.aerialPerspectiveDepth),
                 AerialPerspectiveMaxDistanceKm = Mathf.Max(0.001f, profile.aerialPerspectiveMaxDistanceKm),
                 SunIlluminance = profile.sunIlluminance,
+                UseDirectionalLightColor = profile.useDirectionalLightColor,
+                SunIntensityMultiplier = Mathf.Max(0.0f, profile.sunIntensityMultiplier),
                 MiePhaseG = Mathf.Clamp(profile.miePhaseG, 0.0f, 0.99f),
+                SunAngularRadiusRadians = Mathf.Deg2Rad * Mathf.Clamp(profile.sunAngularRadiusDegrees, 0.0f, 45.0f),
+                SunDiskEdgeSoftnessRadians = Mathf.Deg2Rad * Mathf.Max(0.0f, profile.sunDiskEdgeSoftnessDegrees),
+                SunDiskIntensityMultiplier = Mathf.Max(0.0f, profile.sunDiskIntensityMultiplier),
+                SkyExposure = Mathf.Max(0.001f, profile.skyExposure),
+                AerialPerspectiveExposure = Mathf.Max(0.001f, profile.aerialPerspectiveExposure),
             };
 
             parameters.TransmittanceHash = ComputeTransmittanceHash(parameters);
@@ -133,7 +147,10 @@ namespace Atmosphere.Runtime
                 hash = (hash * 31) + Quantize(parameters.SunIlluminance.x);
                 hash = (hash * 31) + Quantize(parameters.SunIlluminance.y);
                 hash = (hash * 31) + Quantize(parameters.SunIlluminance.z);
+                hash = (hash * 31) + (parameters.UseDirectionalLightColor ? 1 : 0);
+                hash = (hash * 31) + Quantize(parameters.SunIntensityMultiplier);
                 hash = (hash * 31) + Quantize(parameters.MiePhaseG);
+                hash = (hash * 31) + Quantize(parameters.SkyExposure);
                 return hash;
             }
         }
@@ -150,7 +167,10 @@ namespace Atmosphere.Runtime
                 hash = (hash * 31) + Quantize(parameters.SunIlluminance.x);
                 hash = (hash * 31) + Quantize(parameters.SunIlluminance.y);
                 hash = (hash * 31) + Quantize(parameters.SunIlluminance.z);
+                hash = (hash * 31) + (parameters.UseDirectionalLightColor ? 1 : 0);
+                hash = (hash * 31) + Quantize(parameters.SunIntensityMultiplier);
                 hash = (hash * 31) + Quantize(parameters.MiePhaseG);
+                hash = (hash * 31) + Quantize(parameters.AerialPerspectiveExposure);
                 return hash;
             }
         }

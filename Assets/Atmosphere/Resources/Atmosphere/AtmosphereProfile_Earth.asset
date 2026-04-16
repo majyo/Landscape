@@ -34,4 +34,15 @@ MonoBehaviour:
   skyViewHeight: 100
   skyViewRaySteps: 30
   sunIlluminance: {x: 1, y: 1, z: 1}
+  useDirectionalLightColor: 1
+  sunIntensityMultiplier: 4
   miePhaseG: 0.8
+  sunAngularRadiusDegrees: 0.266
+  sunDiskEdgeSoftnessDegrees: 0.03
+  sunDiskIntensityMultiplier: 0.01
+  aerialPerspectiveWidth: 32
+  aerialPerspectiveHeight: 32
+  aerialPerspectiveDepth: 32
+  aerialPerspectiveMaxDistanceKm: 32
+  skyExposure: 1
+  aerialPerspectiveExposure: 1

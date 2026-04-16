@@ -2,6 +2,7 @@
 #define LANDSCAPE_ATMOSPHERE_COMMON_INCLUDED
 
 static const float kAtmosphereTransmittanceDistanceScale = 1.05;
+static const float kAtmosphereHorizonUv = 0.5;
 #ifndef PI
 #define PI 3.14159265359
 #endif
@@ -69,20 +70,32 @@ float GetOzoneDensity(float heightKm, float centerKm, float halfWidthKm)
 
 float2 UvToTransmittanceParameters(float2 uv, float groundRadiusKm, float topRadiusKm)
 {
-    float maxTangentLengthKm = sqrt(max(topRadiusKm * topRadiusKm - groundRadiusKm * groundRadiusKm, 0.0));
-    float tangentLengthKm = uv.y * maxTangentLengthKm;
-    float radiusKm = sqrt(max(tangentLengthKm * tangentLengthKm + groundRadiusKm * groundRadiusKm, 0.0));
+    float H = sqrt(max(topRadiusKm * topRadiusKm - groundRadiusKm * groundRadiusKm, 0.0));
+    float rho = sqrt(max(uv.y, 0.0)) * H;
+    float radiusKm = sqrt(max(rho * rho + groundRadiusKm * groundRadiusKm, 0.0));
 
-    float minDistanceKm = topRadiusKm - radiusKm;
-    float maxDistanceKm = (tangentLengthKm + maxTangentLengthKm) * kAtmosphereTransmittanceDistanceScale;
-    float distanceKm = lerp(minDistanceKm, maxDistanceKm, uv.x);
+    float dMin = topRadiusKm - radiusKm;
+    float dMax = rho + H;
+    float xMu;
 
-    float cosTheta = 1.0;
-    if (distanceKm > 1e-4)
+    if (uv.x <= kAtmosphereHorizonUv)
     {
-        float denominator = max(2.0 * radiusKm * distanceKm, 1e-4);
-        float unclampedCosTheta = (topRadiusKm * topRadiusKm - radiusKm * radiusKm - distanceKm * distanceKm) / denominator;
-        cosTheta = clamp(unclampedCosTheta, -1.0, 1.0);
+        float u = 1.0 - uv.x / max(kAtmosphereHorizonUv, 1e-4);
+        xMu = -u * u;
+    }
+    else
+    {
+        float u = (uv.x - kAtmosphereHorizonUv) / max(1.0 - kAtmosphereHorizonUv, 1e-4);
+        xMu = u * u;
+    }
+
+    float d = dMin + (dMax - dMin) * kAtmosphereTransmittanceDistanceScale * xMu;
+    float cosTheta = 1.0;
+    if (abs(d) > 1e-4)
+    {
+        float denominator = max(2.0 * radiusKm * d, 1e-4);
+        float discriminant = radiusKm * radiusKm + d * d - topRadiusKm * topRadiusKm;
+        cosTheta = clamp(-discriminant / denominator, -1.0, 1.0);
     }
 
     return float2(radiusKm, cosTheta);
@@ -90,15 +103,24 @@ float2 UvToTransmittanceParameters(float2 uv, float groundRadiusKm, float topRad
 
 float2 TransmittanceParametersToUv(float radiusKm, float cosTheta, float groundRadiusKm, float topRadiusKm)
 {
-    float maxTangentLengthKm = sqrt(max(topRadiusKm * topRadiusKm - groundRadiusKm * groundRadiusKm, 0.0));
-    float tangentLengthKm = sqrt(max(radiusKm * radiusKm - groundRadiusKm * groundRadiusKm, 0.0));
-    float v = maxTangentLengthKm > 0.0 ? tangentLengthKm / maxTangentLengthKm : 0.0;
+    float H = sqrt(max(topRadiusKm * topRadiusKm - groundRadiusKm * groundRadiusKm, 0.0));
+    float rho = sqrt(max(radiusKm * radiusKm - groundRadiusKm * groundRadiusKm, 0.0));
+    float v = H > 0.0 ? saturate((rho / H) * (rho / H)) : 0.0;
 
-    float minDistanceKm = topRadiusKm - radiusKm;
-    float maxDistanceKm = (tangentLengthKm + maxTangentLengthKm) * kAtmosphereTransmittanceDistanceScale;
     float discriminant = radiusKm * radiusKm * (cosTheta * cosTheta - 1.0) + topRadiusKm * topRadiusKm;
     float distanceKm = max(0.0, -radiusKm * cosTheta + sqrt(max(discriminant, 0.0)));
-    float u = (distanceKm - minDistanceKm) / max(maxDistanceKm - minDistanceKm, 1e-4);
+    float dMin = topRadiusKm - radiusKm;
+    float dMax = rho + H;
+    float xMu = (distanceKm - dMin) / max((dMax - dMin) * kAtmosphereTransmittanceDistanceScale, 1e-4);
+    float u;
+    if (xMu < 0.0)
+    {
+        u = kAtmosphereHorizonUv * (1.0 - sqrt(saturate(-xMu)));
+    }
+    else
+    {
+        u = kAtmosphereHorizonUv + (1.0 - kAtmosphereHorizonUv) * sqrt(saturate(xMu));
+    }
 
     return saturate(float2(u, v));
 }
