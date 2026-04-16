@@ -29,44 +29,61 @@ int _CloudHasDetailShapeNoise;
 
 float2 GetCloudLayerInterval(float3 cameraPositionKm, float3 rayDirection, bool insideLayer)
 {
-    float tEnterTop = RaySphereIntersectNearest(cameraPositionKm, rayDirection, _CloudTopRadiusKm);
-    float tExitTop = RaySphereIntersectFar(cameraPositionKm, rayDirection, _CloudTopRadiusKm);
-    if (tExitTop <= 0.0)
+    float tTopNear;
+    float tTopFar;
+    if (!RaySphereIntersectInterval(cameraPositionKm, rayDirection, _CloudTopRadiusKm, tTopNear, tTopFar))
         return float2(-1.0, -1.0);
 
-    float tEnterBottom = RaySphereIntersectNearest(cameraPositionKm, rayDirection, _CloudBottomRadiusKm);
-    float tExitBottom = RaySphereIntersectFar(cameraPositionKm, rayDirection, _CloudBottomRadiusKm);
+    float tBottomNear;
+    float tBottomFar;
+    bool bottomHit = RaySphereIntersectInterval(cameraPositionKm, rayDirection, _CloudBottomRadiusKm, tBottomNear, tBottomFar);
+    float tGroundNear;
+    float tGroundFar;
+    bool groundHit = RaySphereIntersectInterval(cameraPositionKm, rayDirection, _AtmosphereGroundRadiusKm, tGroundNear, tGroundFar);
+    float cameraRadiusKm = length(cameraPositionKm);
+    bool insideTop = cameraRadiusKm < _CloudTopRadiusKm;
+    bool insideBottom = cameraRadiusKm < _CloudBottomRadiusKm;
 
-    if (insideLayer)
-    {
-        float start = 0.0;
-        float end = tExitTop;
-        if (dot(cameraPositionKm, cameraPositionKm) > _CloudBottomRadiusKm * _CloudBottomRadiusKm && tExitBottom > 0.0)
-            end = min(end, tExitBottom);
-        return float2(start, end);
-    }
+    float start = -1.0;
+    float end = -1.0;
 
-    if (length(cameraPositionKm) < _CloudBottomRadiusKm)
+    if (insideBottom)
     {
-        if (tEnterTop <= 0.0 || tExitTop <= tEnterTop)
+        if (!bottomHit)
             return float2(-1.0, -1.0);
 
-        float start = max(tEnterTop, 0.0);
-        float end = tExitTop;
-        if (tEnterBottom > start)
-            end = min(end, tEnterBottom);
-        return float2(start, end);
+        start = max(tBottomFar, 0.0);
+        end = tTopFar;
+    }
+    else if (insideTop)
+    {
+        start = 0.0;
+        end = tTopFar;
+        if (bottomHit && tBottomNear > 0.0)
+            end = min(end, tBottomNear);
+    }
+    else
+    {
+        if (tTopFar <= 0.0)
+            return float2(-1.0, -1.0);
+
+        start = max(tTopNear, 0.0);
+        end = tTopFar;
+        if (bottomHit && tBottomNear > start)
+            end = min(end, tBottomNear);
     }
 
-    if (tEnterTop <= 0.0 || tExitTop <= tEnterTop)
+    if (groundHit)
+    {
+        float tGround = tGroundNear > 0.0 ? tGroundNear : tGroundFar;
+        if (tGround > 0.0)
+            end = min(end, tGround);
+    }
+
+    if (end <= start)
         return float2(-1.0, -1.0);
 
-    float clippedStart = max(tEnterTop, 0.0);
-    float clippedEnd = tExitTop;
-    if (tEnterBottom > clippedStart)
-        clippedEnd = min(clippedEnd, tEnterBottom);
-
-    return float2(clippedStart, clippedEnd);
+    return float2(start, end);
 }
 
 [numthreads(8, 8, 1)]

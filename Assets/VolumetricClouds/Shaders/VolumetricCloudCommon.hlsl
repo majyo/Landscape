@@ -38,6 +38,24 @@ float RaySphereIntersectFar(float3 rayOrigin, float3 rayDirection, float sphereR
     return max(t0, t1);
 }
 
+bool RaySphereIntersectInterval(float3 rayOrigin, float3 rayDirection, float sphereRadius, out float tNear, out float tFar)
+{
+    float b = dot(rayOrigin, rayDirection);
+    float c = dot(rayOrigin, rayOrigin) - sphereRadius * sphereRadius;
+    float discriminant = b * b - c;
+    if (discriminant < 0.0)
+    {
+        tNear = -1.0;
+        tFar = -1.0;
+        return false;
+    }
+
+    float sqrtDiscriminant = sqrt(discriminant);
+    tNear = -b - sqrtDiscriminant;
+    tFar = -b + sqrtDiscriminant;
+    return tFar > 0.0;
+}
+
 float3 GetCloudViewDirection(float2 uv, float3 cameraRight, float3 cameraUp, float3 cameraForward, float tanHalfVerticalFov, float aspectRatio)
 {
     float2 ndc = uv * 2.0 - 1.0;

@@ -152,8 +152,15 @@ namespace VolumetricClouds.Runtime
             if (cameraType == CameraType.Preview || cameraType == CameraType.Reflection)
                 return;
 
-            if (cameraType != CameraType.Game && cameraType != CameraType.SceneView)
+            if (Application.isPlaying)
+            {
+                if (cameraType != CameraType.Game)
+                    return;
+            }
+            else if (cameraType != CameraType.Game && cameraType != CameraType.SceneView)
+            {
                 return;
+            }
 
             if (!TryPrepare(camera, out VolumetricCloudParameters parameters))
                 return;
