@@ -16,31 +16,6 @@ namespace Atmosphere.Rendering
             profilingSampler = ProfilingSampler;
         }
 
-#pragma warning disable CS0618
-        [System.Obsolete]
-        public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
-        {
-            AtmosphereController controller = AtmosphereController.Instance;
-            if (controller == null || !controller.TryPrepareForSkyView(renderingData.cameraData.camera, out AtmosphereParameters parameters, out AtmosphereViewParameters viewParameters))
-                return;
-
-            if (controller.TransmittanceHandle == null || controller.MultiScatteringHandle == null)
-                return;
-
-            CommandBuffer cmd = CommandBufferPool.Get(ProfilingName);
-            using (new ProfilingScope(cmd, ProfilingSampler))
-            {
-                if (controller.NeedsSkyViewRebuild(parameters, viewParameters))
-                    controller.RenderSkyView(cmd, parameters, viewParameters);
-                else
-                    controller.BindSkyViewGlobals(cmd, parameters, viewParameters);
-            }
-
-            context.ExecuteCommandBuffer(cmd);
-            CommandBufferPool.Release(cmd);
-        }
-#pragma warning restore CS0618
-
         public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData)
         {
             UniversalCameraData cameraData = frameData.Get<UniversalCameraData>();

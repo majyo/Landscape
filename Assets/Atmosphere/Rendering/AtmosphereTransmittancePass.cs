@@ -16,28 +16,6 @@ namespace Atmosphere.Rendering
             profilingSampler = ProfilingSampler;
         }
 
-#pragma warning disable CS0618
-        [System.Obsolete]
-        public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
-        {
-            AtmosphereController controller = AtmosphereController.Instance;
-            if (controller == null || !controller.TryPrepareForRender(out AtmosphereParameters parameters))
-                return;
-
-            CommandBuffer cmd = CommandBufferPool.Get(ProfilingName);
-            using (new ProfilingScope(cmd, ProfilingSampler))
-            {
-                if (controller.NeedsTransmittanceRebuild(parameters))
-                    controller.RenderTransmittance(cmd, parameters);
-                else
-                    controller.BindGlobals(cmd, parameters);
-            }
-
-            context.ExecuteCommandBuffer(cmd);
-            CommandBufferPool.Release(cmd);
-        }
-#pragma warning restore CS0618
-
         public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData)
         {
             AtmosphereController controller = AtmosphereController.Instance;

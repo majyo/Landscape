@@ -1,0 +1,140 @@
+#pragma kernel CSMain
+
+#include "../../Shaders/VolumetricCloudCommon.hlsl"
+
+Texture3D _CloudBaseShapeNoise;
+SamplerState sampler_CloudBaseShapeNoise;
+Texture3D _CloudDetailShapeNoise;
+SamplerState sampler_CloudDetailShapeNoise;
+RWTexture2D<float4> _VolumetricCloudTexture;
+
+float4 _VolumetricCloudTraceSize;
+float _CloudBottomRadiusKm;
+float _CloudTopRadiusKm;
+float _CloudThicknessKm;
+float _CloudCoverage;
+float _CloudDensityMultiplier;
+float _CloudMaxRenderDistanceKm;
+int _CloudStepCount;
+float4 _CloudShapeScaleData;
+float4 _CloudWindData;
+float _AtmosphereGroundRadiusKm;
+float3 _AtmosphereCameraPositionKm;
+float3 _AtmosphereCameraBasisRight;
+float3 _AtmosphereCameraBasisUp;
+float3 _AtmosphereCameraBasisForward;
+float _AtmosphereCameraTanHalfVerticalFov;
+float _AtmosphereCameraAspectRatio;
+int _CloudHasDetailShapeNoise;
+
+float2 GetCloudLayerInterval(float3 cameraPositionKm, float3 rayDirection, bool insideLayer)
+{
+    float tEnterTop = RaySphereIntersectNearest(cameraPositionKm, rayDirection, _CloudTopRadiusKm);
+    float tExitTop = RaySphereIntersectFar(cameraPositionKm, rayDirection, _CloudTopRadiusKm);
+    if (tExitTop <= 0.0)
+        return float2(-1.0, -1.0);
+
+    float tEnterBottom = RaySphereIntersectNearest(cameraPositionKm, rayDirection, _CloudBottomRadiusKm);
+    float tExitBottom = RaySphereIntersectFar(cameraPositionKm, rayDirection, _CloudBottomRadiusKm);
+
+    if (insideLayer)
+    {
+        float start = 0.0;
+        float end = tExitTop;
+        if (dot(cameraPositionKm, cameraPositionKm) > _CloudBottomRadiusKm * _CloudBottomRadiusKm && tExitBottom > 0.0)
+            end = min(end, tExitBottom);
+        return float2(start, end);
+    }
+
+    if (length(cameraPositionKm) < _CloudBottomRadiusKm)
+    {
+        if (tEnterTop <= 0.0 || tExitTop <= tEnterTop)
+            return float2(-1.0, -1.0);
+
+        float start = max(tEnterTop, 0.0);
+        float end = tExitTop;
+        if (tEnterBottom > start)
+            end = min(end, tEnterBottom);
+        return float2(start, end);
+    }
+
+    if (tEnterTop <= 0.0 || tExitTop <= tEnterTop)
+        return float2(-1.0, -1.0);
+
+    float clippedStart = max(tEnterTop, 0.0);
+    float clippedEnd = tExitTop;
+    if (tEnterBottom > clippedStart)
+        clippedEnd = min(clippedEnd, tEnterBottom);
+
+    return float2(clippedStart, clippedEnd);
+}
+
+[numthreads(8, 8, 1)]
+void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+    uint width = (uint)_VolumetricCloudTraceSize.x;
+    uint height = (uint)_VolumetricCloudTraceSize.y;
+    if (dispatchThreadId.x >= width || dispatchThreadId.y >= height)
+        return;
+
+    float2 uv = (float2(dispatchThreadId.xy) + 0.5) / float2(width, height);
+    float3 rayDirection = GetCloudViewDirection(
+        uv,
+        _AtmosphereCameraBasisRight,
+        _AtmosphereCameraBasisUp,
+        _AtmosphereCameraBasisForward,
+        _AtmosphereCameraTanHalfVerticalFov,
+        _AtmosphereCameraAspectRatio);
+
+    float3 cameraPositionKm = _AtmosphereCameraPositionKm;
+    float cameraRadiusKm = length(cameraPositionKm);
+    bool insideLayer = cameraRadiusKm >= _CloudBottomRadiusKm && cameraRadiusKm <= _CloudTopRadiusKm;
+
+    float2 interval = GetCloudLayerInterval(cameraPositionKm, rayDirection, insideLayer);
+    if (interval.x < 0.0 || interval.y <= interval.x)
+    {
+        _VolumetricCloudTexture[dispatchThreadId.xy] = float4(0.0, 0.0, 0.0, 1.0);
+        return;
+    }
+
+    float tStart = interval.x;
+    float tEnd = min(interval.y, _CloudMaxRenderDistanceKm);
+    if (tEnd <= tStart)
+    {
+        _VolumetricCloudTexture[dispatchThreadId.xy] = float4(0.0, 0.0, 0.0, 1.0);
+        return;
+    }
+
+    int stepCount = max(1, _CloudStepCount);
+    float stepSizeKm = (tEnd - tStart) / stepCount;
+    float accumulatedDensity = 0.0;
+    float maxDensity = 0.0;
+
+    [loop]
+    for (int stepIndex = 0; stepIndex < stepCount; ++stepIndex)
+    {
+        float t = tStart + ((float)stepIndex + 0.5) * stepSizeKm;
+        float3 samplePositionKm = cameraPositionKm + rayDirection * t;
+        float height01 = GetCloudHeight01(samplePositionKm, _AtmosphereGroundRadiusKm, _CloudBottomRadiusKm - _AtmosphereGroundRadiusKm, _CloudThicknessKm);
+
+        float3 baseNoiseUv = samplePositionKm / _CloudShapeScaleData.x;
+        baseNoiseUv += float3(_CloudWindData.z, 0.0, _CloudWindData.w);
+        float baseShape = _CloudBaseShapeNoise.SampleLevel(sampler_CloudBaseShapeNoise, frac(baseNoiseUv), 0).r;
+
+        float detailShape = 1.0;
+        if (_CloudHasDetailShapeNoise != 0)
+        {
+            float3 detailNoiseUv = samplePositionKm / _CloudShapeScaleData.y;
+            detailNoiseUv += float3(_CloudWindData.z * 1.7, 0.0, _CloudWindData.w * 1.7);
+            detailShape = _CloudDetailShapeNoise.SampleLevel(sampler_CloudDetailShapeNoise, frac(detailNoiseUv), 0).r;
+        }
+
+        float density = ComputeCloudDensity(baseShape, detailShape, _CloudCoverage, _CloudDensityMultiplier, height01);
+        accumulatedDensity += density;
+        maxDensity = max(maxDensity, density);
+    }
+
+    float averageDensity = accumulatedDensity / stepCount;
+    float displayDensity = saturate(max(maxDensity, averageDensity));
+    _VolumetricCloudTexture[dispatchThreadId.xy] = float4(displayDensity, displayDensity, displayDensity, 1.0);
+}

@@ -155,6 +155,15 @@ namespace Atmosphere.Runtime
             return true;
         }
 
+        public bool TryGetRuntimeContext(Camera camera, out AtmosphereParameters parameters, out AtmosphereViewParameters viewParameters)
+        {
+            viewParameters = default;
+            if (!TryPrepareForSkyView(camera, out parameters, out viewParameters))
+                return false;
+
+            return true;
+        }
+
         public bool NeedsTransmittanceRebuild(in AtmosphereParameters parameters)
         {
             return forceRebuild || lutManager == null || lutManager.NeedsTransmittanceRebuild(parameters);
@@ -458,7 +467,7 @@ namespace Atmosphere.Runtime
                 return;
             }
 
-            Light[] lights = FindObjectsByType<Light>(FindObjectsSortMode.None);
+            Light[] lights = FindObjectsByType<Light>();
             for (int i = 0; i < lights.Length; i++)
             {
                 if (lights[i] != null && lights[i].type == LightType.Directional)

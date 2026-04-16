@@ -12,7 +12,6 @@ namespace Atmosphere.Rendering
         private const string ProfilingName = "Atmosphere Aerial Composite";
 
         private readonly Material compositeMaterial;
-        private RTHandle tempColorHandle;
 
         public AtmosphereAerialCompositePass(Material material)
         {
@@ -20,39 +19,6 @@ namespace Atmosphere.Rendering
             profilingSampler = new ProfilingSampler(ProfilingName);
             ConfigureInput(ScriptableRenderPassInput.Depth);
         }
-
-#pragma warning disable CS0618
-        [System.Obsolete]
-        public override void Execute(ScriptableRenderContext context, ref RenderingData renderingData)
-        {
-            if (compositeMaterial == null)
-                return;
-
-            AtmosphereController controller = AtmosphereController.Instance;
-            if (controller == null || !controller.TryPrepareForAerialPerspective(renderingData.cameraData.camera, out AtmosphereParameters parameters, out AtmosphereViewParameters viewParameters))
-                return;
-
-            CommandBuffer cmd = CommandBufferPool.Get(ProfilingName);
-            using (new ProfilingScope(cmd, profilingSampler))
-            {
-                controller.BindAerialPerspectiveGlobals(cmd, parameters, viewParameters);
-                RTHandle colorTarget = renderingData.cameraData.renderer.cameraColorTargetHandle;
-                EnsureTempHandle(renderingData.cameraData.cameraTargetDescriptor);
-                if (tempColorHandle == null)
-                {
-                    context.ExecuteCommandBuffer(cmd);
-                    CommandBufferPool.Release(cmd);
-                    return;
-                }
-
-                Blitter.BlitCameraTexture(cmd, colorTarget, tempColorHandle, compositeMaterial, 0);
-                Blitter.BlitCameraTexture(cmd, tempColorHandle, colorTarget, 0, false);
-            }
-
-            context.ExecuteCommandBuffer(cmd);
-            CommandBufferPool.Release(cmd);
-        }
-#pragma warning restore CS0618
 
         public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData)
         {
@@ -102,20 +68,6 @@ namespace Atmosphere.Rendering
 
         public void Dispose()
         {
-            tempColorHandle?.Release();
-            tempColorHandle = null;
-        }
-
-        private void EnsureTempHandle(RenderTextureDescriptor descriptor)
-        {
-            descriptor.msaaSamples = 1;
-            descriptor.depthStencilFormat = UnityEngine.Experimental.Rendering.GraphicsFormat.None;
-            RenderingUtils.ReAllocateHandleIfNeeded(
-                ref tempColorHandle,
-                descriptor,
-                FilterMode.Bilinear,
-                TextureWrapMode.Clamp,
-                name: "_AtmosphereAerialCompositeTemp");
         }
     }
 }

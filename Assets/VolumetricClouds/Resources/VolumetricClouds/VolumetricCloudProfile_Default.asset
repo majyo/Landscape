@@ -1,0 +1,33 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6372f6a452684db3970c6f6b1f364b82, type: 3}
+  m_Name: VolumetricCloudProfile_Default
+  m_EditorClassIdentifier: 
+  enableClouds: 1
+  cloudBottomHeightKm: 1.5
+  cloudTopHeightKm: 4
+  cloudCoverage: 0.45
+  densityMultiplier: 0.04
+  lightAbsorption: 1
+  ambientStrength: 0.35
+  forwardScatteringG: 0.55
+  stepCount: 48
+  shadowStepCount: 8
+  maxRenderDistanceKm: 64
+  traceWidth: 960
+  traceHeight: 540
+  shapeBaseScaleKm: 32
+  detailScaleKm: 8
+  baseShapeNoise: {fileID: 11700000, guid: bbf0656c4a139cb4696a368aa3742b91, type: 3}
+  detailShapeNoise: {fileID: 11700000, guid: 4f3ff803a2ca1ee4194ee4e2a0ab43a2, type: 3}
+  windDirection: {x: 1, y: 0}
+  windSpeedKmPerSecond: 0.02
