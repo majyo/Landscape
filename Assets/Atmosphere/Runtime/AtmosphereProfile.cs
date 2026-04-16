@@ -28,8 +28,13 @@ namespace Atmosphere.Runtime
         [Min(1)] public int transmittanceHeight = 64;
         [Min(1)] public int transmittanceSteps = 40;
 
-        [Header("Multi-scattering LUT")]
+        [Header("Ground")]
+        [Tooltip("Lambert albedo used by the ground for multi-scattering and optional Sky-View ground rendering.")]
         public Vector3 groundAlbedo = new Vector3(0.3f, 0.3f, 0.3f);
+        [Tooltip("When disabled, ground albedo still contributes to multi-scattering but direct ground rendering is skipped in the Sky-View LUT.")]
+        public bool renderGroundInSkyView = true;
+
+        [Header("Multi-scattering LUT")]
         [Min(1)] public int multiScatteringWidth = 32;
         [Min(1)] public int multiScatteringHeight = 32;
         [Min(1)] public int multiScatteringSphereSamples = 64;
@@ -68,6 +73,10 @@ namespace Atmosphere.Runtime
             transmittanceWidth = Mathf.Max(1, transmittanceWidth);
             transmittanceHeight = Mathf.Max(1, transmittanceHeight);
             transmittanceSteps = Mathf.Max(1, transmittanceSteps);
+            groundAlbedo = new Vector3(
+                Mathf.Clamp01(groundAlbedo.x),
+                Mathf.Clamp01(groundAlbedo.y),
+                Mathf.Clamp01(groundAlbedo.z));
             multiScatteringWidth = Mathf.Max(1, multiScatteringWidth);
             multiScatteringHeight = Mathf.Max(1, multiScatteringHeight);
             multiScatteringSphereSamples = Mathf.Max(1, multiScatteringSphereSamples);

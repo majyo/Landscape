@@ -594,6 +594,8 @@ namespace Atmosphere.Runtime
 
         public static void ApplySkyViewParameters(CommandBuffer cmd, ComputeShader shader, in AtmosphereParameters parameters, in AtmosphereViewParameters viewParameters)
         {
+            cmd.SetComputeVectorParam(shader, AtmosphereShaderIDs.GroundAlbedo, parameters.GroundAlbedo);
+            cmd.SetComputeIntParam(shader, AtmosphereShaderIDs.RenderGroundInSkyView, parameters.RenderGroundInSkyView ? 1 : 0);
             cmd.SetComputeVectorParam(
                 shader,
                 AtmosphereShaderIDs.MultiScatteringSize,
@@ -682,6 +684,8 @@ namespace Atmosphere.Runtime
 
         public static void ApplySkyViewParameters(ComputeCommandBuffer cmd, ComputeShader shader, in AtmosphereParameters parameters, in AtmosphereViewParameters viewParameters)
         {
+            cmd.SetComputeVectorParam(shader, AtmosphereShaderIDs.GroundAlbedo, parameters.GroundAlbedo);
+            cmd.SetComputeIntParam(shader, AtmosphereShaderIDs.RenderGroundInSkyView, parameters.RenderGroundInSkyView ? 1 : 0);
             cmd.SetComputeVectorParam(
                 shader,
                 AtmosphereShaderIDs.MultiScatteringSize,

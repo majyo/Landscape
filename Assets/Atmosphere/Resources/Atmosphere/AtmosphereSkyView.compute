@@ -18,6 +18,8 @@ float4 _AtmosphereScaleHeights;
 float4 _AtmosphereOzoneLayer;
 float4 _AtmosphereTransmittanceSize;
 int _AtmosphereTransmittanceSteps;
+float3 _AtmosphereGroundAlbedo;
+int _AtmosphereRenderGroundInSkyView;
 float4 _AtmosphereMultiScatteringSize;
 float4 _AtmosphereSkyViewSize;
 int _AtmosphereSkyViewRaySteps;
@@ -133,6 +135,27 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
         float3 transmittanceToCamera = exp(-opticalDepth);
         skyLuminance += transmittanceToCamera * (singleScattering + multiScattering) * _AtmosphereSunIlluminance * dt;
         opticalDepth += sigmaT * dt;
+    }
+
+    if (_AtmosphereRenderGroundInSkyView != 0 && distanceToGround > 0.0 && distanceToGround < distanceToTop)
+    {
+        float3 hitPositionKm = cameraPositionKm + rayDirection * distanceToGround;
+        float3 groundNormal = normalize(hitPositionKm);
+        float cosSunGround = saturate(dot(groundNormal, sunDirection));
+        float3 groundToSunTransmittance = SampleTransmittanceLut(
+            _AtmosphereTransmittanceLut,
+            sampler_AtmosphereTransmittanceLut,
+            _AtmosphereGroundRadiusKm,
+            cosSunGround,
+            _AtmosphereGroundRadiusKm,
+            _AtmosphereTopRadiusKm);
+        float3 groundRadiance = groundToSunTransmittance
+            * (_AtmosphereGroundAlbedo * INV_PI)
+            * cosSunGround
+            * _AtmosphereSunIlluminance;
+
+        // Add a basic Lambertian ground term for rays ending on the planet surface.
+        skyLuminance += exp(-opticalDepth) * groundRadiance;
     }
 
     float visualTransmittance = exp(-dot(opticalDepth, float3(0.2126, 0.7152, 0.0722)));

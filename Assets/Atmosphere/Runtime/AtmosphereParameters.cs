@@ -18,6 +18,7 @@ namespace Atmosphere.Runtime
         public int TransmittanceHeight;
         public int TransmittanceSteps;
         public Vector3 GroundAlbedo;
+        public bool RenderGroundInSkyView;
         public int MultiScatteringWidth;
         public int MultiScatteringHeight;
         public int MultiScatteringSphereSamples;
@@ -60,7 +61,11 @@ namespace Atmosphere.Runtime
                 TransmittanceWidth = Mathf.Max(1, profile.transmittanceWidth),
                 TransmittanceHeight = Mathf.Max(1, profile.transmittanceHeight),
                 TransmittanceSteps = Mathf.Max(1, profile.transmittanceSteps),
-                GroundAlbedo = profile.groundAlbedo,
+                GroundAlbedo = new Vector3(
+                    Mathf.Clamp01(profile.groundAlbedo.x),
+                    Mathf.Clamp01(profile.groundAlbedo.y),
+                    Mathf.Clamp01(profile.groundAlbedo.z)),
+                RenderGroundInSkyView = profile.renderGroundInSkyView,
                 MultiScatteringWidth = Mathf.Max(1, profile.multiScatteringWidth),
                 MultiScatteringHeight = Mathf.Max(1, profile.multiScatteringHeight),
                 MultiScatteringSphereSamples = Mathf.Max(1, profile.multiScatteringSphereSamples),
@@ -151,6 +156,7 @@ namespace Atmosphere.Runtime
                 hash = (hash * 31) + Quantize(parameters.SunIntensityMultiplier);
                 hash = (hash * 31) + Quantize(parameters.MiePhaseG);
                 hash = (hash * 31) + Quantize(parameters.SkyExposure);
+                hash = (hash * 31) + (parameters.RenderGroundInSkyView ? 1 : 0);
                 return hash;
             }
         }

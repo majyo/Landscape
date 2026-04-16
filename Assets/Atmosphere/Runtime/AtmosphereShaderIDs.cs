@@ -18,6 +18,7 @@ namespace Atmosphere.Runtime
         public static readonly int MultiScatteringLut = Shader.PropertyToID("_AtmosphereMultiScatteringLut");
         public static readonly int MultiScatteringSize = Shader.PropertyToID("_AtmosphereMultiScatteringSize");
         public static readonly int GroundAlbedo = Shader.PropertyToID("_AtmosphereGroundAlbedo");
+        public static readonly int RenderGroundInSkyView = Shader.PropertyToID("_AtmosphereRenderGroundInSkyView");
         public static readonly int MultiScatteringSphereSamples = Shader.PropertyToID("_AtmosphereMultiScatteringSphereSamples");
         public static readonly int MultiScatteringRaySteps = Shader.PropertyToID("_AtmosphereMultiScatteringRaySteps");
         public static readonly int SkyViewLut = Shader.PropertyToID("_AtmosphereSkyViewLut");
