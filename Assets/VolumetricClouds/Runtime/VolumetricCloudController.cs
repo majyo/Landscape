@@ -1,7 +1,6 @@
 using Atmosphere.Runtime;
 using UnityEngine;
 using UnityEngine.Rendering;
-using UnityEngine.Rendering.Universal;
 
 namespace VolumetricClouds.Runtime
 {
@@ -9,8 +8,16 @@ namespace VolumetricClouds.Runtime
     [DisallowMultipleComponent]
     public sealed class VolumetricCloudController : MonoBehaviour
     {
+        private enum DebugOverlayMode
+        {
+            Scattering = 0,
+            Transmittance = 1,
+            Opacity = 2
+        }
+
         private const string DefaultProfilePath = "VolumetricClouds/VolumetricCloudProfile_Default";
         private const string RaymarchComputeShaderPath = "VolumetricClouds/VolumetricCloudRaymarch";
+        private const string CompositeShaderResourceName = "Hidden/Landscape/VolumetricCloudComposite";
         private const string KernelName = "CSMain";
         private const float OverlayPaddingLeft = 8.0f;
         private const float OverlayPaddingRight = 8.0f;
@@ -24,6 +31,7 @@ namespace VolumetricClouds.Runtime
         [SerializeField] private VolumetricCloudProfile profile;
         [SerializeField] private bool showDebugOverlay = true;
         [SerializeField] private Vector2 debugOverlaySize = new Vector2(384.0f, 216.0f);
+        [SerializeField] private DebugOverlayMode debugOverlayMode = DebugOverlayMode.Scattering;
 
         private VolumetricCloudResources resources;
         private ComputeShader raymarchComputeShader;
@@ -64,7 +72,6 @@ namespace VolumetricClouds.Runtime
             resources ??= new VolumetricCloudResources();
             LoadDefaultProfileIfNeeded();
             ResetLogFlags();
-            RenderPipelineManager.beginCameraRendering += OnBeginCameraRendering;
         }
 
         private void OnDisable()
@@ -72,7 +79,6 @@ namespace VolumetricClouds.Runtime
             if (instance == this)
                 instance = null;
 
-            RenderPipelineManager.beginCameraRendering -= OnBeginCameraRendering;
             resources?.Release();
         }
 
@@ -135,84 +141,25 @@ namespace VolumetricClouds.Runtime
             resources?.BindGlobals(cmd, parameters);
         }
 
+        public bool TryGetRaymarchComputeShader(out ComputeShader computeShader, out int kernelIndex)
+        {
+            computeShader = null;
+            kernelIndex = -1;
+
+            if (!EnsureComputeShader())
+                return false;
+
+            computeShader = raymarchComputeShader;
+            kernelIndex = raymarchKernelIndex;
+            return computeShader != null && kernelIndex >= 0;
+        }
+
         private void LoadDefaultProfileIfNeeded()
         {
             if (profile != null)
                 return;
 
             profile = UnityEngine.Resources.Load<VolumetricCloudProfile>(DefaultProfilePath);
-        }
-
-        private void OnBeginCameraRendering(ScriptableRenderContext context, Camera camera)
-        {
-            if (camera == null)
-                return;
-
-            CameraType cameraType = camera.cameraType;
-            if (cameraType == CameraType.Preview || cameraType == CameraType.Reflection)
-                return;
-
-            if (Application.isPlaying)
-            {
-                if (cameraType != CameraType.Game)
-                    return;
-            }
-            else if (cameraType != CameraType.Game && cameraType != CameraType.SceneView)
-            {
-                return;
-            }
-
-            if (!TryPrepare(camera, out VolumetricCloudParameters parameters))
-                return;
-
-            if (!EnsureComputeShader())
-                return;
-
-            CommandBuffer cmd = CommandBufferPool.Get("Volumetric Cloud Density Trace");
-            cmd.SetComputeTextureParam(raymarchComputeShader, raymarchKernelIndex, VolumetricCloudShaderIDs.VolumetricCloudTexture, TraceTexture);
-            cmd.SetComputeTextureParam(raymarchComputeShader, raymarchKernelIndex, VolumetricCloudShaderIDs.CloudBaseShapeNoise, parameters.BaseShapeNoise);
-            if (parameters.DetailShapeNoise != null)
-                cmd.SetComputeTextureParam(raymarchComputeShader, raymarchKernelIndex, VolumetricCloudShaderIDs.CloudDetailShapeNoise, parameters.DetailShapeNoise);
-
-            cmd.SetComputeVectorParam(
-                raymarchComputeShader,
-                VolumetricCloudShaderIDs.VolumetricCloudTraceSize,
-                new Vector4(parameters.TraceWidth, parameters.TraceHeight, 1.0f / parameters.TraceWidth, 1.0f / parameters.TraceHeight));
-            cmd.SetComputeFloatParam(raymarchComputeShader, VolumetricCloudShaderIDs.CloudBottomRadiusKm, parameters.CloudBottomRadiusKm);
-            cmd.SetComputeFloatParam(raymarchComputeShader, VolumetricCloudShaderIDs.CloudTopRadiusKm, parameters.CloudTopRadiusKm);
-            cmd.SetComputeFloatParam(raymarchComputeShader, VolumetricCloudShaderIDs.CloudThicknessKm, parameters.CloudThicknessKm);
-            cmd.SetComputeFloatParam(raymarchComputeShader, VolumetricCloudShaderIDs.CloudCoverage, parameters.CloudCoverage);
-            cmd.SetComputeFloatParam(raymarchComputeShader, VolumetricCloudShaderIDs.CloudDensityMultiplier, parameters.DensityMultiplier);
-            cmd.SetComputeFloatParam(raymarchComputeShader, VolumetricCloudShaderIDs.CloudMaxRenderDistanceKm, parameters.MaxRenderDistanceKm);
-            cmd.SetComputeIntParam(raymarchComputeShader, VolumetricCloudShaderIDs.CloudStepCount, parameters.StepCount);
-            cmd.SetComputeIntParam(raymarchComputeShader, VolumetricCloudShaderIDs.CloudHasDetailShapeNoise, parameters.DetailShapeNoise != null ? 1 : 0);
-            cmd.SetComputeVectorParam(
-                raymarchComputeShader,
-                VolumetricCloudShaderIDs.CloudShapeScaleData,
-                new Vector4(parameters.ShapeBaseScaleKm, parameters.DetailScaleKm, 1.0f / parameters.ShapeBaseScaleKm, 1.0f / parameters.DetailScaleKm));
-            cmd.SetComputeVectorParam(
-                raymarchComputeShader,
-                VolumetricCloudShaderIDs.CloudWindData,
-                new Vector4(parameters.WindDirection.x, parameters.WindDirection.y, parameters.WindOffset.x, parameters.WindOffset.y));
-
-            cmd.SetComputeFloatParam(raymarchComputeShader, AtmosphereShaderIDs.GroundRadiusKm, parameters.GroundRadiusKm);
-            cmd.SetComputeVectorParam(raymarchComputeShader, AtmosphereShaderIDs.CameraPositionKm, new Vector4(parameters.CameraPositionKm.x, parameters.CameraPositionKm.y, parameters.CameraPositionKm.z, 0.0f));
-            cmd.SetComputeVectorParam(raymarchComputeShader, AtmosphereShaderIDs.CameraBasisRight, new Vector4(parameters.CameraBasisRight.x, parameters.CameraBasisRight.y, parameters.CameraBasisRight.z, 0.0f));
-            cmd.SetComputeVectorParam(raymarchComputeShader, AtmosphereShaderIDs.CameraBasisUp, new Vector4(parameters.CameraBasisUp.x, parameters.CameraBasisUp.y, parameters.CameraBasisUp.z, 0.0f));
-            cmd.SetComputeVectorParam(raymarchComputeShader, AtmosphereShaderIDs.CameraBasisForward, new Vector4(parameters.CameraBasisForward.x, parameters.CameraBasisForward.y, parameters.CameraBasisForward.z, 0.0f));
-            cmd.SetComputeFloatParam(raymarchComputeShader, AtmosphereShaderIDs.CameraTanHalfVerticalFov, parameters.TanHalfVerticalFov);
-            cmd.SetComputeFloatParam(raymarchComputeShader, AtmosphereShaderIDs.CameraAspectRatio, parameters.AspectRatio);
-
-            cmd.DispatchCompute(
-                raymarchComputeShader,
-                raymarchKernelIndex,
-                Mathf.CeilToInt(parameters.TraceWidth / 8.0f),
-                Mathf.CeilToInt(parameters.TraceHeight / 8.0f),
-                1);
-
-            BindGlobals(cmd, parameters);
-            context.ExecuteCommandBuffer(cmd);
-            CommandBufferPool.Release(cmd);
         }
 
         private bool EnsureComputeShader()
@@ -257,9 +204,51 @@ namespace VolumetricClouds.Runtime
             Rect textureRect = new Rect(titleRect.x, titleRect.yMax, width, height);
             Rect metadataRect = new Rect(textureRect.x, textureRect.yMax + OverlayMetadataSpacing, textureRect.width, OverlayMetadataHeight);
 
-            GUI.Label(titleRect, "Volumetric Cloud Density Trace", overlayTitleStyle);
-            GUI.DrawTexture(textureRect, TraceTexture, ScaleMode.StretchToFill, false);
+            GUI.Label(titleRect, $"Volumetric Cloud Lighting Trace ({GetOverlayModeLabel()})", overlayTitleStyle);
+            DrawOverlayTexture(textureRect);
             GUI.Label(metadataRect, $"{TraceTexture.width}x{TraceTexture.height} ARGBHalf", overlayLabelStyle);
+        }
+
+        private string GetOverlayModeLabel()
+        {
+            return debugOverlayMode switch
+            {
+                DebugOverlayMode.Transmittance => "Transmittance",
+                DebugOverlayMode.Opacity => "Opacity",
+                _ => "Scattering",
+            };
+        }
+
+        private void DrawOverlayTexture(Rect textureRect)
+        {
+            if (debugOverlayMode == DebugOverlayMode.Scattering)
+            {
+                GUI.DrawTexture(textureRect, TraceTexture, ScaleMode.StretchToFill, false);
+                return;
+            }
+
+            RenderTexture active = RenderTexture.active;
+            Texture2D temp = new Texture2D(TraceTexture.width, TraceTexture.height, TextureFormat.RGBAHalf, false, true);
+            RenderTexture.active = TraceTexture;
+            temp.ReadPixels(new Rect(0, 0, TraceTexture.width, TraceTexture.height), 0, 0, false);
+            temp.Apply(false, false);
+            RenderTexture.active = active;
+
+            Color[] pixels = temp.GetPixels();
+            for (int i = 0; i < pixels.Length; i++)
+            {
+                float value = debugOverlayMode == DebugOverlayMode.Transmittance ? pixels[i].a : 1.0f - pixels[i].a;
+                pixels[i] = new Color(value, value, value, 1.0f);
+            }
+
+            temp.SetPixels(pixels);
+            temp.Apply(false, false);
+            GUI.DrawTexture(textureRect, temp, ScaleMode.StretchToFill, false);
+
+            if (Application.isPlaying)
+                Destroy(temp);
+            else
+                DestroyImmediate(temp);
         }
 
         private void EnsureOverlayStyles()

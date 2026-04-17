@@ -1,31 +1,50 @@
 #pragma kernel CSMain
 
 #include "../../Shaders/VolumetricCloudCommon.hlsl"
+#include "Packages/com.unity.render-pipelines.core/ShaderLibrary/Common.hlsl"
 
 Texture3D _CloudBaseShapeNoise;
 SamplerState sampler_CloudBaseShapeNoise;
 Texture3D _CloudDetailShapeNoise;
 SamplerState sampler_CloudDetailShapeNoise;
+Texture2D _AtmosphereTransmittanceLut;
+SamplerState sampler_AtmosphereTransmittanceLut;
+Texture2D _AtmosphereSkyViewLut;
+SamplerState sampler_AtmosphereSkyViewLut;
+Texture2D<float> _CloudSceneDepthTexture;
 RWTexture2D<float4> _VolumetricCloudTexture;
 
 float4 _VolumetricCloudTraceSize;
+float3 _CloudViewBasisRight;
+float3 _CloudViewBasisUp;
+float3 _CloudViewBasisForward;
+float4 _CloudScreenSize;
 float _CloudBottomRadiusKm;
 float _CloudTopRadiusKm;
 float _CloudThicknessKm;
 float _CloudCoverage;
 float _CloudDensityMultiplier;
+float _CloudLightAbsorption;
+float _CloudAmbientStrength;
+float _CloudPhaseG;
 float _CloudMaxRenderDistanceKm;
 int _CloudStepCount;
+int _CloudShadowStepCount;
 float4 _CloudShapeScaleData;
 float4 _CloudWindData;
 float _AtmosphereGroundRadiusKm;
+float _AtmosphereTopRadiusKm;
+float3 _AtmosphereSunDirection;
+float3 _AtmosphereSunIlluminance;
 float3 _AtmosphereCameraPositionKm;
 float3 _AtmosphereCameraBasisRight;
 float3 _AtmosphereCameraBasisUp;
 float3 _AtmosphereCameraBasisForward;
 float _AtmosphereCameraTanHalfVerticalFov;
 float _AtmosphereCameraAspectRatio;
+float _AtmosphereSkyExposure;
 int _CloudHasDetailShapeNoise;
+float4 _ZBufferParams;
 
 float2 GetCloudLayerInterval(float3 cameraPositionKm, float3 rayDirection, bool insideLayer)
 {
@@ -97,9 +116,9 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
     float2 uv = (float2(dispatchThreadId.xy) + 0.5) / float2(width, height);
     float3 rayDirection = GetCloudViewDirection(
         uv,
-        _AtmosphereCameraBasisRight,
-        _AtmosphereCameraBasisUp,
-        _AtmosphereCameraBasisForward,
+        normalize(_CloudViewBasisRight),
+        normalize(_CloudViewBasisUp),
+        normalize(_CloudViewBasisForward),
         _AtmosphereCameraTanHalfVerticalFov,
         _AtmosphereCameraAspectRatio);
 
@@ -116,6 +135,25 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 
     float tStart = interval.x;
     float tEnd = min(interval.y, _CloudMaxRenderDistanceKm);
+    uint2 sceneDepthPixel = uint2(
+        min((uint)(uv.x * _CloudScreenSize.x), max((uint)_CloudScreenSize.x - 1u, 0u)),
+        min((uint)(uv.y * _CloudScreenSize.y), max((uint)_CloudScreenSize.y - 1u, 0u)));
+    float rawDepth = _CloudSceneDepthTexture[sceneDepthPixel];
+    if (IsFinite(rawDepth))
+    {
+#if UNITY_REVERSED_Z
+        bool hasSceneDepth = rawDepth > 0.0;
+#else
+        bool hasSceneDepth = rawDepth < 1.0;
+#endif
+        if (hasSceneDepth)
+        {
+            float linearEyeDepthMeters = LinearEyeDepth(rawDepth, _ZBufferParams);
+            float sceneDistanceKm = max(0.0, linearEyeDepthMeters * 0.001);
+            tEnd = min(tEnd, sceneDistanceKm);
+        }
+    }
+
     if (tEnd <= tStart)
     {
         _VolumetricCloudTexture[dispatchThreadId.xy] = float4(0.0, 0.0, 0.0, 1.0);
@@ -124,8 +162,10 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 
     int stepCount = max(1, _CloudStepCount);
     float stepSizeKm = (tEnd - tStart) / stepCount;
-    float accumulatedDensity = 0.0;
-    float maxDensity = 0.0;
+    float3 accumLight = 0.0;
+    float transmittance = 1.0;
+    float3 sunDirection = normalize(_AtmosphereSunDirection);
+    float3 sunIlluminance = _AtmosphereSunIlluminance;
 
     [loop]
     for (int stepIndex = 0; stepIndex < stepCount; ++stepIndex)
@@ -147,11 +187,67 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
         }
 
         float density = ComputeCloudDensity(baseShape, detailShape, _CloudCoverage, _CloudDensityMultiplier, height01);
-        accumulatedDensity += density;
-        maxDensity = max(maxDensity, density);
+        if (density < 1e-5)
+            continue;
+
+        float cosSunZenith = dot(normalize(samplePositionKm), sunDirection);
+        float3 sunTransmittance = SampleTransmittanceLut(
+            _AtmosphereTransmittanceLut,
+            sampler_AtmosphereTransmittanceLut,
+            length(samplePositionKm),
+            cosSunZenith,
+            _AtmosphereGroundRadiusKm,
+            _AtmosphereTopRadiusKm);
+
+        float topExitToSun = RaySphereIntersectFar(samplePositionKm, sunDirection, _CloudTopRadiusKm);
+        float bottomHitToSun = RaySphereIntersectNearest(samplePositionKm, sunDirection, _CloudBottomRadiusKm);
+        float shadowMaxDistanceKm = topExitToSun;
+        if (bottomHitToSun > 0.0)
+            shadowMaxDistanceKm = min(shadowMaxDistanceKm, bottomHitToSun);
+
+        int shadowStepCount = max(1, _CloudShadowStepCount);
+        float shadowStepSizeKm = max(shadowMaxDistanceKm, 0.0) / shadowStepCount;
+        float cloudShadowTransmittance = shadowStepSizeKm > 0.0
+            ? MarchCloudShadow(
+                samplePositionKm,
+                sunDirection,
+                shadowStepCount,
+                shadowStepSizeKm,
+                _CloudBottomRadiusKm,
+                _CloudTopRadiusKm,
+                _AtmosphereGroundRadiusKm,
+                _CloudCoverage,
+                _CloudDensityMultiplier,
+                float3(_CloudWindData.z, 0.0, _CloudWindData.w),
+                _CloudBaseShapeNoise,
+                sampler_CloudBaseShapeNoise,
+                _CloudDetailShapeNoise,
+                sampler_CloudDetailShapeNoise,
+                _CloudHasDetailShapeNoise != 0,
+                _CloudShapeScaleData.x,
+                _CloudShapeScaleData.y,
+                _CloudLightAbsorption)
+            : 1.0;
+
+        float phase = PhaseMieCornetteShanks(dot(rayDirection, sunDirection), _CloudPhaseG);
+        float3 ambientDirection = normalize(samplePositionKm - cameraPositionKm);
+        float2 skyUv = DirectionToSkyViewUv(
+            ambientDirection,
+            sunDirection,
+            normalize(_AtmosphereCameraBasisRight),
+            normalize(_AtmosphereCameraBasisUp),
+            normalize(_AtmosphereCameraBasisForward));
+        float3 skyAmbient = _AtmosphereSkyViewLut.SampleLevel(sampler_AtmosphereSkyViewLut, skyUv, 0).rgb * _AtmosphereSkyExposure;
+        float3 ambient = skyAmbient * _CloudAmbientStrength;
+        float3 lighting = ambient + sunIlluminance * (sunTransmittance * cloudShadowTransmittance) * phase;
+
+        float stepAlpha = 1.0 - exp(-density * stepSizeKm);
+        accumLight += transmittance * lighting * stepAlpha;
+        transmittance *= (1.0 - stepAlpha);
+
+        if (transmittance < 0.01)
+            break;
     }
 
-    float averageDensity = accumulatedDensity / stepCount;
-    float displayDensity = saturate(max(maxDensity, averageDensity));
-    _VolumetricCloudTexture[dispatchThreadId.xy] = float4(displayDensity, displayDensity, displayDensity, 1.0);
+    _VolumetricCloudTexture[dispatchThreadId.xy] = float4(max(accumLight, 0.0), saturate(transmittance));
 }

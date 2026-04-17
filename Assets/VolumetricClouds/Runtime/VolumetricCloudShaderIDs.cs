@@ -6,6 +6,9 @@ namespace VolumetricClouds.Runtime
     {
         public static readonly int VolumetricCloudTexture = Shader.PropertyToID("_VolumetricCloudTexture");
         public static readonly int VolumetricCloudTraceSize = Shader.PropertyToID("_VolumetricCloudTraceSize");
+        public static readonly int CloudViewBasisRight = Shader.PropertyToID("_CloudViewBasisRight");
+        public static readonly int CloudViewBasisUp = Shader.PropertyToID("_CloudViewBasisUp");
+        public static readonly int CloudViewBasisForward = Shader.PropertyToID("_CloudViewBasisForward");
         public static readonly int CloudBottomRadiusKm = Shader.PropertyToID("_CloudBottomRadiusKm");
         public static readonly int CloudTopRadiusKm = Shader.PropertyToID("_CloudTopRadiusKm");
         public static readonly int CloudThicknessKm = Shader.PropertyToID("_CloudThicknessKm");
@@ -22,5 +25,8 @@ namespace VolumetricClouds.Runtime
         public static readonly int CloudHasDetailShapeNoise = Shader.PropertyToID("_CloudHasDetailShapeNoise");
         public static readonly int CloudShapeScaleData = Shader.PropertyToID("_CloudShapeScaleData");
         public static readonly int CloudWindData = Shader.PropertyToID("_CloudWindData");
+        public static readonly int CloudDebugMode = Shader.PropertyToID("_CloudDebugMode");
+        public static readonly int CloudSceneDepthTexture = Shader.PropertyToID("_CloudSceneDepthTexture");
+        public static readonly int CloudScreenSize = Shader.PropertyToID("_CloudScreenSize");
     }
 }

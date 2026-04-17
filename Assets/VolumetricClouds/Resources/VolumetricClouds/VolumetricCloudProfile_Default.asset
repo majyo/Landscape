@@ -15,7 +15,7 @@ MonoBehaviour:
   enableClouds: 1
   cloudBottomHeightKm: 1.5
   cloudTopHeightKm: 4
-  cloudCoverage: 0.45
+  cloudCoverage: 0.5
   densityMultiplier: 0.04
   lightAbsorption: 1
   ambientStrength: 0.35

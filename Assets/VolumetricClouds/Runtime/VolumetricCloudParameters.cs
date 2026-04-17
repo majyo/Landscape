@@ -29,6 +29,9 @@ namespace VolumetricClouds.Runtime
         public readonly Vector3 SunDirection;
         public readonly Vector3 SunIlluminance;
         public readonly Vector3 CameraPositionKm;
+        public readonly Vector3 ViewBasisRight;
+        public readonly Vector3 ViewBasisUp;
+        public readonly Vector3 ViewBasisForward;
         public readonly Vector3 CameraBasisRight;
         public readonly Vector3 CameraBasisUp;
         public readonly Vector3 CameraBasisForward;
@@ -66,6 +69,9 @@ namespace VolumetricClouds.Runtime
             Vector3 sunDirection,
             Vector3 sunIlluminance,
             Vector3 cameraPositionKm,
+            Vector3 viewBasisRight,
+            Vector3 viewBasisUp,
+            Vector3 viewBasisForward,
             Vector3 cameraBasisRight,
             Vector3 cameraBasisUp,
             Vector3 cameraBasisForward,
@@ -100,6 +106,9 @@ namespace VolumetricClouds.Runtime
             SunDirection = sunDirection;
             SunIlluminance = sunIlluminance;
             CameraPositionKm = cameraPositionKm;
+            ViewBasisRight = viewBasisRight;
+            ViewBasisUp = viewBasisUp;
+            ViewBasisForward = viewBasisForward;
             CameraBasisRight = cameraBasisRight;
             CameraBasisUp = cameraBasisUp;
             CameraBasisForward = cameraBasisForward;
@@ -133,6 +142,9 @@ namespace VolumetricClouds.Runtime
                 sunDirection,
                 sunIlluminance,
                 cameraPositionKm,
+                viewBasisRight,
+                viewBasisUp,
+                viewBasisForward,
                 cameraBasisRight,
                 cameraBasisUp,
                 cameraBasisForward,
@@ -161,9 +173,12 @@ namespace VolumetricClouds.Runtime
             float windDistanceKm = Mathf.Max(0.0f, profile.windSpeedKmPerSecond) * Mathf.Max(0.0f, timeSeconds);
             Vector2 windOffset = normalizedWind * windDistanceKm;
             Transform cameraTransform = camera.transform;
-            Vector3 cameraBasisRight = cameraTransform.right.normalized;
-            Vector3 cameraBasisUp = cameraTransform.up.normalized;
-            Vector3 cameraBasisForward = cameraTransform.forward.normalized;
+            Vector3 viewBasisRight = cameraTransform.right.normalized;
+            Vector3 viewBasisUp = cameraTransform.up.normalized;
+            Vector3 viewBasisForward = cameraTransform.forward.normalized;
+            Vector3 cameraBasisRight = new Vector3(viewParameters.CameraBasisRight.x, viewParameters.CameraBasisRight.y, viewParameters.CameraBasisRight.z);
+            Vector3 cameraBasisUp = new Vector3(viewParameters.CameraBasisUp.x, viewParameters.CameraBasisUp.y, viewParameters.CameraBasisUp.z);
+            Vector3 cameraBasisForward = new Vector3(viewParameters.CameraBasisForward.x, viewParameters.CameraBasisForward.y, viewParameters.CameraBasisForward.z);
             float verticalFovRadians = Mathf.Deg2Rad * Mathf.Max(1.0f, camera.fieldOfView);
             float tanHalfVerticalFov = Mathf.Tan(verticalFovRadians * 0.5f);
             float aspectRatio = camera.aspect > 0.0f ? camera.aspect : 1.0f;
@@ -193,6 +208,9 @@ namespace VolumetricClouds.Runtime
                 viewParameters.SunDirection,
                 viewParameters.SunIlluminance,
                 viewParameters.CameraPositionKm,
+                viewBasisRight,
+                viewBasisUp,
+                viewBasisForward,
                 cameraBasisRight,
                 cameraBasisUp,
                 cameraBasisForward,
@@ -238,6 +256,9 @@ namespace VolumetricClouds.Runtime
             Vector3 sunDirection,
             Vector3 sunIlluminance,
             Vector3 cameraPositionKm,
+            Vector3 viewBasisRight,
+            Vector3 viewBasisUp,
+            Vector3 viewBasisForward,
             Vector3 cameraBasisRight,
             Vector3 cameraBasisUp,
             Vector3 cameraBasisForward,
@@ -271,6 +292,9 @@ namespace VolumetricClouds.Runtime
                 hash = AppendVector3(hash, sunDirection);
                 hash = AppendVector3(hash, sunIlluminance);
                 hash = AppendVector3(hash, cameraPositionKm);
+                hash = AppendVector3(hash, viewBasisRight);
+                hash = AppendVector3(hash, viewBasisUp);
+                hash = AppendVector3(hash, viewBasisForward);
                 hash = AppendVector3(hash, cameraBasisRight);
                 hash = AppendVector3(hash, cameraBasisUp);
                 hash = AppendVector3(hash, cameraBasisForward);

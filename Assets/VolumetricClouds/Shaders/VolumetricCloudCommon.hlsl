@@ -1,42 +1,7 @@
 #ifndef VOLUMETRIC_CLOUD_COMMON_INCLUDED
 #define VOLUMETRIC_CLOUD_COMMON_INCLUDED
 
-#define CLOUD_PI 3.14159265359
-
-float RaySphereIntersectNearest(float3 rayOrigin, float3 rayDirection, float sphereRadius)
-{
-    float b = dot(rayOrigin, rayDirection);
-    float c = dot(rayOrigin, rayOrigin) - sphereRadius * sphereRadius;
-    float discriminant = b * b - c;
-    if (discriminant < 0.0)
-        return -1.0;
-
-    float sqrtDiscriminant = sqrt(discriminant);
-    float t0 = -b - sqrtDiscriminant;
-    float t1 = -b + sqrtDiscriminant;
-
-    if (t0 > 0.0)
-        return t0;
-
-    if (t1 > 0.0)
-        return t1;
-
-    return -1.0;
-}
-
-float RaySphereIntersectFar(float3 rayOrigin, float3 rayDirection, float sphereRadius)
-{
-    float b = dot(rayOrigin, rayDirection);
-    float c = dot(rayOrigin, rayOrigin) - sphereRadius * sphereRadius;
-    float discriminant = b * b - c;
-    if (discriminant < 0.0)
-        return -1.0;
-
-    float sqrtDiscriminant = sqrt(discriminant);
-    float t0 = -b - sqrtDiscriminant;
-    float t1 = -b + sqrtDiscriminant;
-    return max(t0, t1);
-}
+#include "../../Atmosphere/Shaders/AtmosphereCommon.hlsl"
 
 bool RaySphereIntersectInterval(float3 rayOrigin, float3 rayDirection, float sphereRadius, out float tNear, out float tFar)
 {
@@ -83,6 +48,55 @@ float ComputeCloudDensity(float baseShape, float detailShape, float cloudCoverag
     float detailErode = lerp(1.0, saturate(detailShape * 1.2 - 0.2), 0.35);
     float verticalProfile = GetCloudVerticalProfile(height01);
     return baseCoverage * detailErode * verticalProfile * densityMultiplier;
+}
+
+float MarchCloudShadow(
+    float3 samplePositionKm,
+    float3 sunDirection,
+    int shadowStepCount,
+    float shadowStepSizeKm,
+    float cloudBottomRadiusKm,
+    float cloudTopRadiusKm,
+    float groundRadiusKm,
+    float cloudCoverage,
+    float densityMultiplier,
+    float3 windOffsetKm,
+    Texture3D baseNoise,
+    SamplerState baseNoiseSampler,
+    Texture3D detailNoise,
+    SamplerState detailNoiseSampler,
+    bool hasDetailNoise,
+    float shapeBaseScaleKm,
+    float detailScaleKm,
+    float lightAbsorption)
+{
+    float opticalDepth = 0.0;
+
+    [loop]
+    for (int stepIndex = 0; stepIndex < shadowStepCount; ++stepIndex)
+    {
+        float t = ((float)stepIndex + 0.5) * shadowStepSizeKm;
+        float3 marchPositionKm = samplePositionKm + sunDirection * t;
+        float radiusKm = length(marchPositionKm);
+        if (radiusKm < cloudBottomRadiusKm || radiusKm > cloudTopRadiusKm)
+            break;
+
+        float height01 = GetCloudHeight01(marchPositionKm, groundRadiusKm, cloudBottomRadiusKm - groundRadiusKm, cloudTopRadiusKm - cloudBottomRadiusKm);
+        float3 baseNoiseUv = marchPositionKm / shapeBaseScaleKm + windOffsetKm;
+        float baseShape = baseNoise.SampleLevel(baseNoiseSampler, frac(baseNoiseUv), 0).r;
+
+        float detailShape = 1.0;
+        if (hasDetailNoise)
+        {
+            float3 detailNoiseUv = marchPositionKm / detailScaleKm + windOffsetKm * 1.7;
+            detailShape = detailNoise.SampleLevel(detailNoiseSampler, frac(detailNoiseUv), 0).r;
+        }
+
+        float density = ComputeCloudDensity(baseShape, detailShape, cloudCoverage, densityMultiplier, height01);
+        opticalDepth += density * shadowStepSizeKm;
+    }
+
+    return exp(-lightAbsorption * opticalDepth);
 }
 
 #endif
