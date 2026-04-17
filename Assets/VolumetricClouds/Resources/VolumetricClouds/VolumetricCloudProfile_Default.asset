@@ -16,7 +16,7 @@ MonoBehaviour:
   cloudBottomHeightKm: 1.5
   cloudTopHeightKm: 4
   cloudCoverage: 0.5
-  densityMultiplier: 0.04
+  densityMultiplier: 1.2
   lightAbsorption: 1
   ambientStrength: 0.35
   forwardScatteringG: 0.55

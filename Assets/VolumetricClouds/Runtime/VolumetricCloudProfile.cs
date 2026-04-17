@@ -12,7 +12,7 @@ namespace VolumetricClouds.Runtime
         [Min(0.001f)] public float cloudBottomHeightKm = 1.5f;
         [Min(0.001f)] public float cloudTopHeightKm = 4.0f;
         [Range(0.0f, 1.0f)] public float cloudCoverage = 0.45f;
-        [Min(0.0f)] public float densityMultiplier = 0.04f;
+        [Min(0.0f)] public float densityMultiplier = 1.2f;
 
         [Header("Lighting")]
         [Min(0.0f)] public float lightAbsorption = 1.0f;
