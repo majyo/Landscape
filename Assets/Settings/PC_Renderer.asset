@@ -25,10 +25,9 @@ MonoBehaviour:
     probeSamplingDebugTexture: {fileID: 2800000, guid: 24ec0e140fb444a44ab96ee80844e18e, type: 3}
     probeVolumeBlendStatesCS: {fileID: 7200000, guid: b9a23f869c4fd45f19c5ada54dd82176, type: 3}
   m_RendererFeatures:
-  - {fileID: 6400000000000000003}
   - {fileID: 7833122117494664109}
   - {fileID: 6400000000000000001}
-  m_RendererFeatureMap: 03008062175ed158ad6b866f10d7b46c01008062175ed158
+  m_RendererFeatureMap: ad6b866f10d7b46c01008062175ed158
   m_UseNativeRenderPass: 1
   xrSystemData: {fileID: 0}
   postProcessData: {fileID: 11400000, guid: 41439944d30ece34e96484bdb6645b55, type: 2}
@@ -73,22 +72,7 @@ MonoBehaviour:
   renderPassEvent: 350
   runInSceneView: 1
   aerialCompositeShader: {fileID: 4800000, guid: 248cde27aa114554b4b0a1c91e8cc1d4, type: 3}
---- !u!114 &6400000000000000003
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 0}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 6fa0ea5532ae4665ae047b0812452263, type: 3}
-  m_Name: VolumetricCloudRendererFeature
-  m_EditorClassIdentifier: 
-  m_Active: 1
-  renderPassEvent: 450
-  runInSceneView: 1
-  compositeShader: {fileID: 4800000, guid: 468d3cad81014fdd912fb3b8be70030b, type: 3}
+  volumetricCloudCompositeShader: {fileID: 4800000, guid: 468d3cad81014fdd912fb3b8be70030b, type: 3}
 --- !u!114 &7833122117494664109
 MonoBehaviour:
   m_ObjectHideFlags: 0

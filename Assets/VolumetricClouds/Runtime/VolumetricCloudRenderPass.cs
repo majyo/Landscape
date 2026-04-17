@@ -12,6 +12,8 @@ namespace VolumetricClouds.Rendering
     {
         private const string ProfilingName = "Volumetric Cloud Lighting Trace";
         private static readonly ProfilingSampler ProfilingSampler = new ProfilingSampler(ProfilingName);
+        private static bool loggedMissingAtmosphereLuts;
+        private static bool loggedMissingDepthTexture;
 
         public VolumetricCloudRenderPass()
         {
@@ -37,13 +39,29 @@ namespace VolumetricClouds.Rendering
                 || AtmosphereController.Instance.TransmittanceHandle == null
                 || AtmosphereController.Instance.SkyViewHandle == null)
             {
+                if (!loggedMissingAtmosphereLuts)
+                {
+                    Debug.LogWarning("VolumetricClouds: skipping cloud trace because Atmosphere transmittance/sky-view LUTs are not ready yet.");
+                    loggedMissingAtmosphereLuts = true;
+                }
                 return;
             }
+
+            loggedMissingAtmosphereLuts = false;
 
             UniversalResourceData resourceData = frameData.Get<UniversalResourceData>();
             TextureHandle depthHandle = resourceData.cameraDepthTexture;
             if (!depthHandle.IsValid())
+            {
+                if (!loggedMissingDepthTexture)
+                {
+                    Debug.LogWarning("VolumetricClouds: skipping cloud trace because cameraDepthTexture is unavailable for the current camera.");
+                    loggedMissingDepthTexture = true;
+                }
                 return;
+            }
+
+            loggedMissingDepthTexture = false;
 
             TextureHandle traceHandle = renderGraph.ImportTexture(controller.TraceHandle);
             TextureHandle transmittanceHandle = renderGraph.ImportTexture(AtmosphereController.Instance.TransmittanceHandle);

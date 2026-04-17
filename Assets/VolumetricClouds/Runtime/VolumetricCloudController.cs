@@ -128,6 +128,9 @@ namespace VolumetricClouds.Runtime
 
             resources ??= new VolumetricCloudResources();
             parameters = VolumetricCloudParameters.FromRuntime(profile, atmosphereParameters, viewParameters, camera, Time.time);
+            if (!parameters.EnableClouds)
+                return false;
+
             if (!resources.EnsureTraceTarget(parameters))
                 return false;
 

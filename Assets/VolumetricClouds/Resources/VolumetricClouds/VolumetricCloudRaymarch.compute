@@ -149,7 +149,8 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
         if (hasSceneDepth)
         {
             float linearEyeDepthMeters = LinearEyeDepth(rawDepth, _ZBufferParams);
-            float sceneDistanceKm = max(0.0, linearEyeDepthMeters * 0.001);
+            float rayDepthScale = max(dot(rayDirection, normalize(_CloudViewBasisForward)), 1e-4);
+            float sceneDistanceKm = max(0.0, linearEyeDepthMeters * 0.001 / rayDepthScale);
             tEnd = min(tEnd, sceneDistanceKm);
         }
     }

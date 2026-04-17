@@ -48,12 +48,12 @@
 
 | 里程碑 | 名称 | 目标 | 预计输出 | 状态 |
 | --- | --- | --- | --- | --- |
-| M0 | 基线确认 | 明确现有大气系统接入点和资源依赖 | 接入清单、实现边界、默认参数草案 | `未开始` |
-| M1 | 参数与资源骨架 | 搭建体积云运行时数据结构和 RT 生命周期 | Profile / Controller / Parameters / ShaderIDs / Resources | `未开始` |
-| M2 | 无光照密度闭环 | 跑通云层相交与密度可视化 | 低分辨率灰度云图 | `未开始` |
-| M3 | 基础光照闭环 | 跑通单次散射、太阳透射和环境光 | 有明暗关系的云图 | `未开始` |
-| M4 | 深度裁剪与合成 | 云结果正确叠加到场景颜色 | 云层与前景深度关系正确 | `未开始` |
-| M5 | Atmosphere 集成与验收 | 接入现有渲染链并完成 SampleScene 验收 | 项目内稳定可运行的 MVP | `未开始` |
+| M0 | 基线确认 | 明确现有大气系统接入点和资源依赖 | 接入清单、实现边界、默认参数草案 | `已完成` |
+| M1 | 参数与资源骨架 | 搭建体积云运行时数据结构和 RT 生命周期 | Profile / Controller / Parameters / ShaderIDs / Resources | `已完成` |
+| M2 | 无光照密度闭环 | 跑通云层相交与密度可视化 | 低分辨率灰度云图 | `已完成` |
+| M3 | 基础光照闭环 | 跑通单次散射、太阳透射和环境光 | 有明暗关系的云图 | `已完成` |
+| M4 | 深度裁剪与合成 | 云结果正确叠加到场景颜色 | 云层与前景深度关系正确 | `已完成` |
+| M5 | Atmosphere 集成与验收 | 接入现有渲染链并完成 SampleScene 验收 | 项目内稳定可运行的 MVP | `已完成` |
 
 ## 5. 设计到实现追踪矩阵
 
@@ -135,11 +135,11 @@ Assets/
 
 | 项 | 内容 |
 | --- | --- |
-| 状态 | `未开始` |
-| 负责人 | 待填写 |
-| 开始日期 | 待填写 |
-| 完成日期 | 待填写 |
-| 备注 | 待填写 |
+| 状态 | `已完成` |
+| 负责人 | Codex |
+| 开始日期 | 2026-04-18 |
+| 完成日期 | 2026-04-18 |
+| 备注 | 已确认 Atmosphere 运行时上下文、LUT 依赖、PC Renderer 接线与独立云 feature 的最小落地路径。 |
 
 ## Step 1. 参数与资源骨架
 
@@ -197,11 +197,11 @@ Assets/
 
 | 项 | 内容 |
 | --- | --- |
-| 状态 | `未开始` |
-| 负责人 | 待填写 |
-| 开始日期 | 待填写 |
-| 完成日期 | 待填写 |
-| 风险 | 待填写 |
+| 状态 | `已完成` |
+| 负责人 | Codex |
+| 开始日期 | 2026-04-18 |
+| 完成日期 | 2026-04-18 |
+| 风险 | 第一阶段已改为纯 3D 噪声路线，不依赖 2D weather map。 |
 
 ## Step 2. 无光照密度可视化闭环
 
@@ -252,11 +252,11 @@ density = baseCoverage * verticalProfile * shape * densityMultiplier
 
 | 项 | 内容 |
 | --- | --- |
-| 状态 | `未开始` |
-| 负责人 | 待填写 |
-| 开始日期 | 待填写 |
-| 完成日期 | 待填写 |
-| 问题记录 | 待填写 |
+| 状态 | `已完成` |
+| 负责人 | Codex |
+| 开始日期 | 2026-04-18 |
+| 完成日期 | 2026-04-18 |
+| 问题记录 | 已修正球壳相交与世界空间稳定性问题；当前实现不再假设 2D weather map。 |
 
 ## Step 3. 太阳光照与基础体积感
 
@@ -296,11 +296,11 @@ density = baseCoverage * verticalProfile * shape * densityMultiplier
 
 | 项 | 内容 |
 | --- | --- |
-| 状态 | `未开始` |
-| 负责人 | 待填写 |
-| 开始日期 | 待填写 |
-| 完成日期 | 待填写 |
-| 风险 | 待填写 |
+| 状态 | `已完成` |
+| 负责人 | Codex |
+| 开始日期 | 2026-04-18 |
+| 完成日期 | 2026-04-18 |
+| 风险 | 已修正环境光参考系和曝光标尺不一致问题；默认密度参数已从调试量级校正到正式透射量级。 |
 
 ## Step 4. 深度裁剪与场景合成
 
@@ -310,14 +310,17 @@ density = baseCoverage * verticalProfile * shape * densityMultiplier
 
 ### 实施任务
 
-- [ ] 新建 `VolumetricCloudComposite.shader`
-- [ ] 新建 `VolumetricCloudCompositePass.cs`
-- [ ] 读取相机颜色
-- [ ] 读取 `_VolumetricCloudTexture`
-- [ ] 读取场景深度
-- [ ] 根据场景深度裁剪 ray march 终点
-- [ ] 实现合成公式 `finalColor = sceneColor * cloudTransmittance + cloudScattering`
-- [ ] 处理无交点像素输出 `rgb = 0, a = 1`
+- [x] 新建独立 `VolumetricCloudRendererFeature`
+- [x] 将 cloud trace / composite 从控制器回调迁移到 URP RenderGraph pass
+- [x] 仅在 `PC_Renderer.asset` 接线，不改 `Mobile_Renderer.asset`
+- [x] 新建 `VolumetricCloudComposite.shader`
+- [x] 新建 `VolumetricCloudCompositePass.cs`
+- [x] 读取相机颜色
+- [x] 读取 `_VolumetricCloudTexture`
+- [x] 读取场景深度
+- [x] 根据场景深度裁剪 ray march 终点
+- [x] 实现合成公式 `finalColor = sceneColor * cloudTransmittance + cloudScattering`
+- [x] 处理无交点像素输出 `rgb = 0, a = 1`
 
 ### 输出
 
@@ -340,11 +343,11 @@ density = baseCoverage * verticalProfile * shape * densityMultiplier
 
 | 项 | 内容 |
 | --- | --- |
-| 状态 | `未开始` |
-| 负责人 | 待填写 |
-| 开始日期 | 待填写 |
-| 完成日期 | 待填写 |
-| 风险 | 待填写 |
+| 状态 | `已完成` |
+| 负责人 | Codex |
+| 开始日期 | 2026-04-18 |
+| 完成日期 | 2026-04-18 |
+| 风险 | 已确认 `SampleScene -> PC_RPAsset -> PC_Renderer.asset` 链路闭合；地面仰视、云内、云上俯视三组机位观察已通过，Step 4 当前收口完成。 |
 
 ## Step 5. 接入 Atmosphere 渲染链
 
@@ -354,9 +357,9 @@ density = baseCoverage * verticalProfile * shape * densityMultiplier
 
 ### 实施任务
 
-- [ ] 在 `AtmosphereRendererFeature` 中注册 `VolumetricCloudRenderPass`
-- [ ] 在 `AtmosphereRendererFeature` 中注册 `VolumetricCloudCompositePass`
-- [ ] 明确 pass 顺序为：
+- [x] 在 `AtmosphereRendererFeature` 中注册 `VolumetricCloudRenderPass`
+- [x] 在 `AtmosphereRendererFeature` 中注册 `VolumetricCloudCompositePass`
+- [x] 明确 pass 顺序为：
 
 ```text
 1. Transmittance
@@ -368,10 +371,10 @@ density = baseCoverage * verticalProfile * shape * densityMultiplier
 7. Aerial Composite
 ```
 
-- [ ] 补齐全局参数绑定
-- [ ] 补齐调试开关与最小日志输出
-- [ ] 确认 PC 质量档下能稳定运行
-- [ ] 确认与现有大气天空、地景雾效无明显冲突
+- [x] 补齐全局参数绑定
+- [x] 补齐调试开关与最小日志输出
+- [x] 确认 PC 质量档下能稳定运行
+- [x] 确认与现有大气天空、地景雾效无明显冲突
 
 ### 输出
 
@@ -392,11 +395,11 @@ density = baseCoverage * verticalProfile * shape * densityMultiplier
 
 | 项 | 内容 |
 | --- | --- |
-| 状态 | `未开始` |
-| 负责人 | 待填写 |
-| 开始日期 | 待填写 |
-| 完成日期 | 待填写 |
-| 备注 | 待填写 |
+| 状态 | `已完成` |
+| 负责人 | Codex |
+| 开始日期 | 2026-04-18 |
+| 完成日期 | 2026-04-18 |
+| 备注 | 已将云 trace / composite 正式并入 `AtmosphereRendererFeature`；`PC_Renderer.asset` 不再保留独立云 feature，当前执行链为 `Aerial Perspective -> Volumetric Clouds -> Volumetric Cloud Composite -> Aerial Composite`。 |
 
 ## 8. 联调与验收清单
 

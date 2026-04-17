@@ -2,6 +2,7 @@ using Atmosphere.Runtime;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
+using VolumetricClouds.Rendering;
 
 namespace Atmosphere.Rendering
 {
@@ -10,13 +11,18 @@ namespace Atmosphere.Rendering
         [SerializeField] private RenderPassEvent renderPassEvent = RenderPassEvent.BeforeRenderingSkybox;
         [SerializeField] private bool runInSceneView = true;
         [SerializeField] private Shader aerialCompositeShader;
+        [SerializeField] private Shader volumetricCloudCompositeShader;
 
         private AtmosphereTransmittancePass transmittancePass;
         private AtmosphereMultiScatteringPass multiScatteringPass;
         private AtmosphereSkyViewPass skyViewPass;
         private AtmosphereAerialPerspectivePass aerialPerspectivePass;
+        private VolumetricCloudRenderPass volumetricCloudRenderPass;
+        private VolumetricCloudCompositePass volumetricCloudCompositePass;
         private AtmosphereAerialCompositePass aerialCompositePass;
+        private Material volumetricCloudCompositeMaterial;
         private Material aerialCompositeMaterial;
+        private bool loggedMissingVolumetricCloudCompositeShader;
 
         public override void Create()
         {
@@ -40,6 +46,27 @@ namespace Atmosphere.Rendering
                 renderPassEvent = renderPassEvent
             };
 
+            volumetricCloudRenderPass = new VolumetricCloudRenderPass
+            {
+                renderPassEvent = RenderPassEvent.BeforeRenderingTransparents
+            };
+
+            if (volumetricCloudCompositeShader == null)
+                volumetricCloudCompositeShader = Shader.Find("Hidden/Landscape/VolumetricCloudComposite");
+
+            if (volumetricCloudCompositeShader != null)
+                volumetricCloudCompositeMaterial = CoreUtils.CreateEngineMaterial(volumetricCloudCompositeShader);
+            else if (!loggedMissingVolumetricCloudCompositeShader)
+            {
+                Debug.LogError("VolumetricClouds: failed to resolve Hidden/Landscape/VolumetricCloudComposite for AtmosphereRendererFeature integration.");
+                loggedMissingVolumetricCloudCompositeShader = true;
+            }
+
+            volumetricCloudCompositePass = new VolumetricCloudCompositePass(volumetricCloudCompositeMaterial)
+            {
+                renderPassEvent = RenderPassEvent.BeforeRenderingTransparents
+            };
+
             if (aerialCompositeShader == null)
                 aerialCompositeShader = Shader.Find("Hidden/Landscape/AtmosphereAerialComposite");
 
@@ -54,8 +81,16 @@ namespace Atmosphere.Rendering
 
         public override void AddRenderPasses(ScriptableRenderer renderer, ref RenderingData renderingData)
         {
-            if (transmittancePass == null || multiScatteringPass == null || skyViewPass == null || aerialPerspectivePass == null || aerialCompositePass == null)
+            if (transmittancePass == null
+                || multiScatteringPass == null
+                || skyViewPass == null
+                || aerialPerspectivePass == null
+                || volumetricCloudRenderPass == null
+                || volumetricCloudCompositePass == null
+                || aerialCompositePass == null)
+            {
                 Create();
+            }
 
             CameraType cameraType = renderingData.cameraData.cameraType;
             if (cameraType == CameraType.Preview || cameraType == CameraType.Reflection)
@@ -71,12 +106,17 @@ namespace Atmosphere.Rendering
             renderer.EnqueuePass(multiScatteringPass);
             renderer.EnqueuePass(skyViewPass);
             renderer.EnqueuePass(aerialPerspectivePass);
+            renderer.EnqueuePass(volumetricCloudRenderPass);
+            renderer.EnqueuePass(volumetricCloudCompositePass);
             renderer.EnqueuePass(aerialCompositePass);
         }
 
         protected override void Dispose(bool disposing)
         {
+            volumetricCloudCompositePass?.Dispose();
             aerialCompositePass?.Dispose();
+            CoreUtils.Destroy(volumetricCloudCompositeMaterial);
+            volumetricCloudCompositeMaterial = null;
             CoreUtils.Destroy(aerialCompositeMaterial);
             aerialCompositeMaterial = null;
         }
