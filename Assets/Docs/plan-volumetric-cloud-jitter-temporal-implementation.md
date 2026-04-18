@@ -74,7 +74,7 @@
 
 | 里程碑 | 名称 | 目标 | 预计输出 | 状态 |
 | --- | --- | --- | --- | --- |
-| T0 | 基线确认 | 明确当前 trace、资源和 pass 接入点 | 依赖清单、实现边界 | `未开始` |
+| T0 | 基线确认 | 明确当前 trace、资源和 pass 接入点 | 依赖清单、实现边界 | `已完成` |
 | T1 | Jitter 输入骨架 | 在 raymarch 端引入稳定可控的抖动采样 | 每帧 jitter 序列与参数链 | `未开始` |
 | T2 | History 资源骨架 | 搭建 history RT 生命周期与双缓冲切换 | 当前帧/历史帧 RT 管理 | `未开始` |
 | T3 | Temporal Accumulation 闭环 | 跑通 reprojection + 累积混合 | 更稳定的云 trace | `未开始` |
@@ -137,17 +137,63 @@ Assets/
 
 ### 实施任务
 
-- [ ] 确认当前 `VolumetricCloudRenderPass` 的 trace 写入点
-- [ ] 确认 `VolumetricCloudResources` 当前仅管理单张 trace RT
-- [ ] 确认 `VolumetricCloudCompositePass` 只消费一张最终 trace RT
-- [ ] 确认当前是否已有可复用的 jitter / blue-noise / temporal 基础设施
-- [ ] 确认需要新增的最小相机历史参数集合
+- [x] 确认当前 `VolumetricCloudRenderPass` 的 trace 写入点
+- [x] 确认 `VolumetricCloudResources` 当前仅管理单张 trace RT
+- [x] 确认 `VolumetricCloudCompositePass` 只消费一张最终 trace RT
+- [x] 确认当前是否已有可复用的 jitter / blue-noise / temporal 基础设施
+- [x] 确认需要新增的最小相机历史参数集合
 
 ### 输出
 
 - 时域稳定化接入点清单
 - 资源改造清单
 - 新增 shader/pass 的最小集合
+
+### Step 0 结论（2026-04-18）
+
+#### 时域稳定化接入点清单
+
+- 当前 `VolumetricCloudRenderPass` 在 `RecordRenderGraph` 中导入 `VolumetricCloudController.TraceHandle`，并在 compute pass 内调用 `VolumetricCloudRaymarch.compute` 将结果直接写入该 RT；随后 `Bind Globals` pass 把同一张 RT 绑定为 `_VolumetricCloudTexture`。
+- 当前 `VolumetricCloudResources` 仅持有一组持久资源：`traceTexture` + `traceHandle`。生命周期由 `VolumetricCloudController.TryPrepare -> EnsureTraceTarget` 驱动，只根据 `TraceWidth` / `TraceHeight` 与 `ResourceHash` 进行重建。
+- 当前 `VolumetricCloudCompositePass` 只导入 `VolumetricCloudController.TraceHandle` 这一张云 trace，并按 `sceneColor * transmittance + scattering` 公式完成合成，不读取任何 history 或中间时域结果。
+- 当前 `AtmosphereRendererFeature` 只串联 `VolumetricCloudRenderPass -> VolumetricCloudCompositePass`。因此 temporal accumulation 的安全插入点应位于两者之间，而不是写入 `VolumetricCloudController.OnGUI`、controller 回调或 raymarch compute 内部。
+
+#### `current trace` / `history trace` / `stabilized trace` 职责
+
+- `current trace`：当前帧 raymarch 的原始输出，语义保持 `RGB = scattering`、`A = transmittance`，不承担 history 读写职责。
+- `history trace`：上一帧稳定化后的云结果，跨帧持久保存，仅供 temporal pass 做 reprojection 与混合读取。
+- `stabilized trace`：当前帧 temporal accumulation 的输出，供现有 composite 直接消费，并作为下一帧的 history 来源。
+- 结论：累积必须发生在单独 temporal pass 中，raymarch 只写 `current trace`，不能在 march 循环内直接混 history。
+
+#### 资源改造清单
+
+- 将 `VolumetricCloudResources` 从“单张 trace RT”扩展为“`current trace` + history 双缓冲 + 当前可供 composite 读取的 active trace 引用”。
+- 将 history 生命周期集中在 `VolumetricCloudController` + `VolumetricCloudResources` 管理：controller 负责 history validity、相机历史参数缓存与 reset 触发，resources 负责 RT 创建、重建、交换和释放。
+- 让 `VolumetricCloudCompositePass` 从“固定读取 `TraceHandle`”改为“读取 stabilized / active trace handle”；当 temporal 关闭或 history 无效时，允许直接回退到 `current trace`。
+
+#### 新增 shader / pass 的最小集合
+
+- 新增 `VolumetricCloudTemporalAccumulationPass`，职责仅限读取 `current trace` 与 `history trace`，输出 `stabilized trace`。
+- 新增 `VolumetricCloudTemporalAccumulation.compute`，负责 reprojection 与 accumulation 混合。
+- 扩展 `AtmosphereRendererFeature`，把 temporal pass 插入到 `VolumetricCloudRenderPass` 与 `VolumetricCloudCompositePass` 之间。
+- 扩展 `VolumetricCloudParameters`、`VolumetricCloudShaderIDs` 与 `VolumetricCloudRaymarch.compute`，用于传递 jitter 参数；但 raymarch 仍只产出 `current trace`。
+
+#### 可复用基础设施确认
+
+- 项目当前确实存在 URP 级别的 TAA 设置和 blue-noise 资源引用，`SampleScene` 也序列化了 TAA 配置。
+- 但在当前工程的 `Assets/VolumetricClouds` / `Assets/Atmosphere` 代码中，没有可直接复用的 Halton 序列、云 history RT、reprojection、temporal accumulation pass，或云专用 jitter 参数链。
+- 结论：Step 1 到 Step 3 应以体积云模块自带实现为主，首版不依赖全局 TAA、motion vector 管线或 URP 内建 temporal 资源接线。
+
+#### 最小相机历史参数集合
+
+- 前一帧 `CameraPositionKm`
+- 前一帧 `ViewBasisRight`
+- 前一帧 `ViewBasisUp`
+- 前一帧 `ViewBasisForward`
+- 前一帧 `TanHalfVerticalFov`
+- 前一帧 `AspectRatio`
+- 前一帧 `TraceWidth` / `TraceHeight`
+- `historyValid` 状态位，以及用于主动 reset 的关键参数 hash 快照
 
 ### 退出条件
 
@@ -159,11 +205,11 @@ Assets/
 
 | 项 | 内容 |
 | --- | --- |
-| 状态 | `未开始` |
+| 状态 | `已完成` |
 | 负责人 | Codex |
-| 开始日期 | 待填写 |
-| 完成日期 | 待填写 |
-| 备注 | 当前已确认项目没有体积云专用 history RT 或 temporal accumulation 实现。 |
+| 开始日期 | 2026-04-18 |
+| 完成日期 | 2026-04-18 |
+| 备注 | 已确认 temporal 接入点位于 `VolumetricCloudRenderPass` 与 `VolumetricCloudCompositePass` 之间；当前项目没有体积云专用 history RT、reprojection 或 temporal accumulation 实现。 |
 
 ## Step 1. Jitter 输入骨架
 
@@ -493,6 +539,7 @@ transmittanceOut = lerp(currentTransmittance, historyTransmittance, historyWeigh
 截至 2026-04-18：
 
 - 文档已创建
-- 当前状态：`方案已立项，代码未开始`
-- 现有云链已满足接入 jitter 与 temporal accumulation 的前提
-- 下一步建议直接进入 `Step 0 基线确认与接入前检查`
+- `Step 0 基线确认与接入前检查` 已完成
+- 当前状态：`T0 已完成，Step 1 未开始`
+- 已确认现有云链满足接入 jitter 与 temporal accumulation 的前提，且 temporal pass 应插入在 `VolumetricCloudRenderPass` 与 `VolumetricCloudCompositePass` 之间
+- 下一步建议直接进入 `Step 1 Jitter 输入骨架`
