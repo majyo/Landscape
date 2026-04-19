@@ -18,6 +18,18 @@ namespace VolumetricClouds.Runtime
         public readonly float MaxRenderDistanceKm;
         public readonly int TraceWidth;
         public readonly int TraceHeight;
+        public readonly bool EnableJitter;
+        public readonly float JitterStrength;
+        public readonly int JitterSequenceLength;
+        public readonly int JitterFrameIndex;
+        public readonly int JitterIndex;
+        public readonly Vector2 JitterOffset;
+        public readonly bool EnableTemporalAccumulation;
+        public readonly float TemporalResponse;
+        public readonly float TemporalTransmittanceRejectThreshold;
+        public readonly float TemporalCameraResetDistanceKm;
+        public readonly float TemporalCameraResetAngleDegrees;
+        public readonly float TemporalFovResetDegrees;
         public readonly float ShapeBaseScaleKm;
         public readonly float DetailScaleKm;
         public readonly Vector2 WindDirection;
@@ -43,6 +55,7 @@ namespace VolumetricClouds.Runtime
         public readonly Vector2 WindOffset;
         public readonly int ResourceHash;
         public readonly int ParameterHash;
+        public readonly int HistoryResetHash;
 
         public VolumetricCloudParameters(
             bool enableClouds,
@@ -58,6 +71,18 @@ namespace VolumetricClouds.Runtime
             float maxRenderDistanceKm,
             int traceWidth,
             int traceHeight,
+            bool enableJitter,
+            float jitterStrength,
+            int jitterSequenceLength,
+            int jitterFrameIndex,
+            int jitterIndex,
+            Vector2 jitterOffset,
+            bool enableTemporalAccumulation,
+            float temporalResponse,
+            float temporalTransmittanceRejectThreshold,
+            float temporalCameraResetDistanceKm,
+            float temporalCameraResetAngleDegrees,
+            float temporalFovResetDegrees,
             float shapeBaseScaleKm,
             float detailScaleKm,
             Vector2 windDirection,
@@ -95,6 +120,18 @@ namespace VolumetricClouds.Runtime
             MaxRenderDistanceKm = maxRenderDistanceKm;
             TraceWidth = traceWidth;
             TraceHeight = traceHeight;
+            EnableJitter = enableJitter;
+            JitterStrength = jitterStrength;
+            JitterSequenceLength = jitterSequenceLength;
+            JitterFrameIndex = jitterFrameIndex;
+            JitterIndex = jitterIndex;
+            JitterOffset = jitterOffset;
+            EnableTemporalAccumulation = enableTemporalAccumulation;
+            TemporalResponse = temporalResponse;
+            TemporalTransmittanceRejectThreshold = temporalTransmittanceRejectThreshold;
+            TemporalCameraResetDistanceKm = temporalCameraResetDistanceKm;
+            TemporalCameraResetAngleDegrees = temporalCameraResetAngleDegrees;
+            TemporalFovResetDegrees = temporalFovResetDegrees;
             ShapeBaseScaleKm = shapeBaseScaleKm;
             DetailScaleKm = detailScaleKm;
             WindDirection = windDirection;
@@ -119,6 +156,36 @@ namespace VolumetricClouds.Runtime
             CloudThicknessKm = cloudThicknessKm;
             WindOffset = windOffset;
             ResourceHash = ComputeResourceHash(traceWidth, traceHeight);
+            HistoryResetHash = ComputeHistoryResetHash(
+                enableClouds,
+                cloudBottomHeightKm,
+                cloudTopHeightKm,
+                cloudCoverage,
+                densityMultiplier,
+                lightAbsorption,
+                ambientStrength,
+                forwardScatteringG,
+                stepCount,
+                shadowStepCount,
+                maxRenderDistanceKm,
+                enableJitter,
+                jitterStrength,
+                jitterSequenceLength,
+                enableTemporalAccumulation,
+                shapeBaseScaleKm,
+                detailScaleKm,
+                windDirection,
+                windSpeedKmPerSecond,
+                baseShapeNoise,
+                detailShapeNoise,
+                groundRadiusKm,
+                topRadiusKm,
+                sunDirection,
+                sunIlluminance,
+                cloudBottomRadiusKm,
+                cloudTopRadiusKm,
+                cloudThicknessKm,
+                ResourceHash);
             ParameterHash = ComputeParameterHash(
                 enableClouds,
                 cloudBottomHeightKm,
@@ -131,6 +198,18 @@ namespace VolumetricClouds.Runtime
                 stepCount,
                 shadowStepCount,
                 maxRenderDistanceKm,
+                enableJitter,
+                jitterStrength,
+                jitterSequenceLength,
+                jitterFrameIndex,
+                jitterIndex,
+                jitterOffset,
+                enableTemporalAccumulation,
+                temporalResponse,
+                temporalTransmittanceRejectThreshold,
+                temporalCameraResetDistanceKm,
+                temporalCameraResetAngleDegrees,
+                temporalFovResetDegrees,
                 shapeBaseScaleKm,
                 detailScaleKm,
                 windDirection,
@@ -162,7 +241,8 @@ namespace VolumetricClouds.Runtime
             in AtmosphereParameters atmosphereParameters,
             in AtmosphereViewParameters viewParameters,
             Camera camera,
-            float timeSeconds)
+            float timeSeconds,
+            in VolumetricCloudJitterState jitterState)
         {
             Vector2 normalizedWind = profile.windDirection.sqrMagnitude > 1e-6f
                 ? profile.windDirection.normalized
@@ -197,6 +277,18 @@ namespace VolumetricClouds.Runtime
                 Mathf.Max(0.001f, profile.maxRenderDistanceKm),
                 Mathf.Max(1, profile.traceWidth),
                 Mathf.Max(1, profile.traceHeight),
+                profile.enableJitter,
+                Mathf.Clamp01(profile.jitterStrength),
+                Mathf.Max(1, profile.jitterSequenceLength),
+                jitterState.FrameIndex,
+                jitterState.JitterIndex,
+                jitterState.JitterOffset,
+                profile.enableTemporalAccumulation,
+                Mathf.Clamp(profile.temporalResponse, 0.0f, 0.99f),
+                Mathf.Clamp01(profile.temporalTransmittanceRejectThreshold),
+                Mathf.Max(0.0f, profile.temporalCameraResetDistanceKm),
+                Mathf.Clamp(profile.temporalCameraResetAngleDegrees, 0.0f, 180.0f),
+                Mathf.Max(0.0f, profile.temporalFovResetDegrees),
                 Mathf.Max(0.001f, profile.shapeBaseScaleKm),
                 Mathf.Max(0.001f, profile.detailScaleKm),
                 normalizedWind,
@@ -245,6 +337,18 @@ namespace VolumetricClouds.Runtime
             int stepCount,
             int shadowStepCount,
             float maxRenderDistanceKm,
+            bool enableJitter,
+            float jitterStrength,
+            int jitterSequenceLength,
+            int jitterFrameIndex,
+            int jitterIndex,
+            Vector2 jitterOffset,
+            bool enableTemporalAccumulation,
+            float temporalResponse,
+            float temporalTransmittanceRejectThreshold,
+            float temporalCameraResetDistanceKm,
+            float temporalCameraResetAngleDegrees,
+            float temporalFovResetDegrees,
             float shapeBaseScaleKm,
             float detailScaleKm,
             Vector2 windDirection,
@@ -283,6 +387,18 @@ namespace VolumetricClouds.Runtime
                 hash = (hash * 31) + stepCount;
                 hash = (hash * 31) + shadowStepCount;
                 hash = AppendFloat(hash, maxRenderDistanceKm);
+                hash = (hash * 31) + (enableJitter ? 1 : 0);
+                hash = AppendFloat(hash, jitterStrength);
+                hash = (hash * 31) + jitterSequenceLength;
+                hash = (hash * 31) + jitterFrameIndex;
+                hash = (hash * 31) + jitterIndex;
+                hash = AppendVector2(hash, jitterOffset);
+                hash = (hash * 31) + (enableTemporalAccumulation ? 1 : 0);
+                hash = AppendFloat(hash, temporalResponse);
+                hash = AppendFloat(hash, temporalTransmittanceRejectThreshold);
+                hash = AppendFloat(hash, temporalCameraResetDistanceKm);
+                hash = AppendFloat(hash, temporalCameraResetAngleDegrees);
+                hash = AppendFloat(hash, temporalFovResetDegrees);
                 hash = AppendFloat(hash, shapeBaseScaleKm);
                 hash = AppendFloat(hash, detailScaleKm);
                 hash = AppendVector2(hash, windDirection);
@@ -307,6 +423,72 @@ namespace VolumetricClouds.Runtime
                 hash = (hash * 31) + (enableClouds ? 1 : 0);
                 hash = (hash * 31) + (baseShapeNoise != null ? baseShapeNoise.GetHashCode() : 0);
                 hash = (hash * 31) + (detailShapeNoise != null ? detailShapeNoise.GetHashCode() : 0);
+                return hash;
+            }
+        }
+
+        private static int ComputeHistoryResetHash(
+            bool enableClouds,
+            float cloudBottomHeightKm,
+            float cloudTopHeightKm,
+            float cloudCoverage,
+            float densityMultiplier,
+            float lightAbsorption,
+            float ambientStrength,
+            float forwardScatteringG,
+            int stepCount,
+            int shadowStepCount,
+            float maxRenderDistanceKm,
+            bool enableJitter,
+            float jitterStrength,
+            int jitterSequenceLength,
+            bool enableTemporalAccumulation,
+            float shapeBaseScaleKm,
+            float detailScaleKm,
+            Vector2 windDirection,
+            float windSpeedKmPerSecond,
+            Texture3D baseShapeNoise,
+            Texture3D detailShapeNoise,
+            float groundRadiusKm,
+            float topRadiusKm,
+            Vector3 sunDirection,
+            Vector3 sunIlluminance,
+            float cloudBottomRadiusKm,
+            float cloudTopRadiusKm,
+            float cloudThicknessKm,
+            int resourceHash)
+        {
+            unchecked
+            {
+                int hash = resourceHash;
+                hash = (hash * 31) + (enableClouds ? 1 : 0);
+                hash = AppendFloat(hash, cloudBottomHeightKm);
+                hash = AppendFloat(hash, cloudTopHeightKm);
+                hash = AppendFloat(hash, cloudCoverage);
+                hash = AppendFloat(hash, densityMultiplier);
+                hash = AppendFloat(hash, lightAbsorption);
+                hash = AppendFloat(hash, ambientStrength);
+                hash = AppendFloat(hash, forwardScatteringG);
+                hash = (hash * 31) + stepCount;
+                hash = (hash * 31) + shadowStepCount;
+                hash = AppendFloat(hash, maxRenderDistanceKm);
+                hash = (hash * 31) + (enableJitter ? 1 : 0);
+                hash = AppendFloat(hash, jitterStrength);
+                hash = (hash * 31) + jitterSequenceLength;
+                hash = (hash * 31) + (enableTemporalAccumulation ? 1 : 0);
+                hash = AppendFloat(hash, shapeBaseScaleKm);
+                hash = AppendFloat(hash, detailScaleKm);
+                hash = AppendVector2(hash, windDirection);
+                hash = AppendFloat(hash, windSpeedKmPerSecond);
+                hash = (hash * 31) + (baseShapeNoise != null ? baseShapeNoise.GetHashCode() : 0);
+                hash = (hash * 31) + (detailShapeNoise != null ? detailShapeNoise.GetHashCode() : 0);
+                hash = AppendFloat(hash, groundRadiusKm);
+                hash = AppendFloat(hash, topRadiusKm);
+                hash = AppendVector3(hash, sunDirection);
+                hash = AppendVector3(hash, sunIlluminance);
+                hash = AppendFloat(hash, cloudBottomRadiusKm);
+                hash = AppendFloat(hash, cloudTopRadiusKm);
+                hash = AppendFloat(hash, cloudThicknessKm);
                 return hash;
             }
         }

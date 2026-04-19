@@ -28,8 +28,10 @@ namespace VolumetricClouds.Rendering
                 return;
 
             VolumetricCloudController controller = VolumetricCloudController.Instance;
-            if (controller == null || !controller.TryPrepare(cameraData.camera, out VolumetricCloudParameters parameters))
+            if (controller == null || !controller.TryPrepare(cameraData.camera, true, out VolumetricCloudParameters parameters, out bool resourcesRecreated))
                 return;
+
+            controller.BeginTemporalFrame(cameraData.camera, parameters, resourcesRecreated);
 
             if (!controller.TryGetRaymarchComputeShader(out ComputeShader computeShader, out int kernelIndex))
                 return;
@@ -159,6 +161,7 @@ namespace VolumetricClouds.Rendering
             cmd.SetComputeIntParam(computeShader, VolumetricCloudShaderIDs.CloudStepCount, parameters.StepCount);
             cmd.SetComputeIntParam(computeShader, VolumetricCloudShaderIDs.CloudShadowStepCount, parameters.ShadowStepCount);
             cmd.SetComputeIntParam(computeShader, VolumetricCloudShaderIDs.CloudHasDetailShapeNoise, parameters.DetailShapeNoise != null ? 1 : 0);
+            cmd.SetComputeIntParam(computeShader, VolumetricCloudShaderIDs.CloudEnableJitter, parameters.EnableJitter ? 1 : 0);
             cmd.SetComputeVectorParam(
                 computeShader,
                 VolumetricCloudShaderIDs.CloudShapeScaleData,
@@ -167,6 +170,10 @@ namespace VolumetricClouds.Rendering
                 computeShader,
                 VolumetricCloudShaderIDs.CloudWindData,
                 new Vector4(parameters.WindDirection.x, parameters.WindDirection.y, parameters.WindOffset.x, parameters.WindOffset.y));
+            cmd.SetComputeVectorParam(
+                computeShader,
+                VolumetricCloudShaderIDs.CloudJitterData,
+                new Vector4(parameters.JitterOffset.x, parameters.JitterOffset.y, parameters.JitterStrength, 0.0f));
 
             cmd.SetComputeFloatParam(computeShader, AtmosphereShaderIDs.GroundRadiusKm, parameters.GroundRadiusKm);
             cmd.SetComputeFloatParam(computeShader, AtmosphereShaderIDs.TopRadiusKm, parameters.TopRadiusKm);

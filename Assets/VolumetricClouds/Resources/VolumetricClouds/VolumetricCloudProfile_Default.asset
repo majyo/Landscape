@@ -25,6 +25,15 @@ MonoBehaviour:
   maxRenderDistanceKm: 64
   traceWidth: 960
   traceHeight: 540
+  enableJitter: 0
+  jitterStrength: 1
+  jitterSequenceLength: 8
+  enableTemporalAccumulation: 1
+  temporalResponse: 0.9
+  temporalTransmittanceRejectThreshold: 0.2
+  temporalCameraResetDistanceKm: 0.25
+  temporalCameraResetAngleDegrees: 20
+  temporalFovResetDegrees: 2
   shapeBaseScaleKm: 32
   detailScaleKm: 8
   baseShapeNoise: {fileID: 11700000, guid: bbf0656c4a139cb4696a368aa3742b91, type: 3}

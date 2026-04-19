@@ -1,0 +1,95 @@
+#pragma kernel CSMain
+
+#include "../../Shaders/VolumetricCloudCommon.hlsl"
+
+Texture2D<float4> _VolumetricCloudCurrentTexture;
+Texture2D<float4> _VolumetricCloudHistoryTexture;
+SamplerState sampler_VolumetricCloudHistoryTexture;
+RWTexture2D<float4> _VolumetricCloudStabilizedTexture;
+RWTexture2D<float4> _VolumetricCloudHistoryOutputTexture;
+RWTexture2D<float4> _VolumetricCloudHistoryWeightTexture;
+
+float4 _VolumetricCloudTraceSize;
+float3 _CloudViewBasisRight;
+float3 _CloudViewBasisUp;
+float3 _CloudViewBasisForward;
+float3 _CloudPreviousCameraPositionKm;
+float3 _CloudPreviousViewBasisRight;
+float3 _CloudPreviousViewBasisUp;
+float3 _CloudPreviousViewBasisForward;
+float4 _CloudPreviousCameraData;
+float4 _CloudTemporalData;
+float3 _AtmosphereCameraPositionKm;
+float _AtmosphereCameraTanHalfVerticalFov;
+float _AtmosphereCameraAspectRatio;
+
+float2 ProjectDirectionToUv(float3 direction, float3 basisRight, float3 basisUp, float3 basisForward, float tanHalfVerticalFov, float aspectRatio, out bool valid)
+{
+    float forward = dot(direction, normalize(basisForward));
+    valid = forward > 1e-4;
+    if (!valid)
+        return 0.5;
+
+    float x = dot(direction, normalize(basisRight)) / max(forward * tanHalfVerticalFov * aspectRatio, 1e-4);
+    float y = dot(direction, normalize(basisUp)) / max(forward * tanHalfVerticalFov, 1e-4);
+    float2 uv = float2(x, y) * 0.5 + 0.5;
+    valid = all(uv >= 0.0) && all(uv <= 1.0);
+    return uv;
+}
+
+[numthreads(8, 8, 1)]
+void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
+{
+    uint width = (uint)_VolumetricCloudTraceSize.x;
+    uint height = (uint)_VolumetricCloudTraceSize.y;
+    if (dispatchThreadId.x >= width || dispatchThreadId.y >= height)
+        return;
+
+    float2 uv = (float2(dispatchThreadId.xy) + 0.5) / float2(width, height);
+    float4 currentTrace = _VolumetricCloudCurrentTexture[dispatchThreadId.xy];
+
+    float temporalResponse = saturate(_CloudTemporalData.x);
+    bool historyValid = _CloudTemporalData.y > 0.5;
+    float reprojectionDistanceKm = max(_CloudTemporalData.z, 1.0);
+    float transmittanceRejectThreshold = saturate(_CloudTemporalData.w);
+
+    float historyWeight = 0.0;
+    float4 historyTrace = currentTrace;
+    if (historyValid)
+    {
+        float3 currentDirection = GetCloudViewDirection(
+            uv,
+            normalize(_CloudViewBasisRight),
+            normalize(_CloudViewBasisUp),
+            normalize(_CloudViewBasisForward),
+            _AtmosphereCameraTanHalfVerticalFov,
+            _AtmosphereCameraAspectRatio);
+        float3 reprojectionPositionKm = _AtmosphereCameraPositionKm + currentDirection * reprojectionDistanceKm;
+        float3 previousDirection = normalize(reprojectionPositionKm - _CloudPreviousCameraPositionKm);
+
+        bool previousUvValid;
+        float2 previousUv = ProjectDirectionToUv(
+            previousDirection,
+            _CloudPreviousViewBasisRight,
+            _CloudPreviousViewBasisUp,
+            _CloudPreviousViewBasisForward,
+            _CloudPreviousCameraData.x,
+            _CloudPreviousCameraData.y,
+            previousUvValid);
+
+        if (previousUvValid)
+        {
+            historyTrace = _VolumetricCloudHistoryTexture.SampleLevel(sampler_VolumetricCloudHistoryTexture, previousUv, 0);
+            float transmittanceDelta = abs(currentTrace.a - historyTrace.a);
+            historyWeight = transmittanceDelta <= transmittanceRejectThreshold ? temporalResponse : 0.0;
+        }
+    }
+
+    float4 accumulatedTrace;
+    accumulatedTrace.rgb = max(lerp(currentTrace.rgb, historyTrace.rgb, historyWeight), 0.0);
+    accumulatedTrace.a = saturate(lerp(currentTrace.a, historyTrace.a, historyWeight));
+
+    _VolumetricCloudStabilizedTexture[dispatchThreadId.xy] = accumulatedTrace;
+    _VolumetricCloudHistoryOutputTexture[dispatchThreadId.xy] = accumulatedTrace;
+    _VolumetricCloudHistoryWeightTexture[dispatchThreadId.xy] = float4(historyWeight, historyWeight, historyWeight, 1.0);
+}

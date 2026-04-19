@@ -32,6 +32,7 @@ int _CloudStepCount;
 int _CloudShadowStepCount;
 float4 _CloudShapeScaleData;
 float4 _CloudWindData;
+float4 _CloudJitterData;
 float _AtmosphereGroundRadiusKm;
 float _AtmosphereTopRadiusKm;
 float3 _AtmosphereSunDirection;
@@ -44,6 +45,7 @@ float _AtmosphereCameraTanHalfVerticalFov;
 float _AtmosphereCameraAspectRatio;
 float _AtmosphereSkyExposure;
 int _CloudHasDetailShapeNoise;
+int _CloudEnableJitter;
 float4 _ZBufferParams;
 
 float2 GetCloudLayerInterval(float3 cameraPositionKm, float3 rayDirection, bool insideLayer)
@@ -163,6 +165,9 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
 
     int stepCount = max(1, _CloudStepCount);
     float stepSizeKm = (tEnd - tStart) / stepCount;
+    float samplePhase = _CloudEnableJitter != 0
+        ? lerp(0.5, _CloudJitterData.x, saturate(_CloudJitterData.z))
+        : 0.5;
     float3 accumLight = 0.0;
     float transmittance = 1.0;
     float3 sunDirection = normalize(_AtmosphereSunDirection);
@@ -171,7 +176,7 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
     [loop]
     for (int stepIndex = 0; stepIndex < stepCount; ++stepIndex)
     {
-        float t = tStart + ((float)stepIndex + 0.5) * stepSizeKm;
+        float t = tStart + ((float)stepIndex + samplePhase) * stepSizeKm;
         float3 samplePositionKm = cameraPositionKm + rayDirection * t;
         float height01 = GetCloudHeight01(samplePositionKm, _AtmosphereGroundRadiusKm, _CloudBottomRadiusKm - _AtmosphereGroundRadiusKm, _CloudThicknessKm);
 

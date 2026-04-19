@@ -5,6 +5,11 @@ namespace VolumetricClouds.Runtime
     public static class VolumetricCloudShaderIDs
     {
         public static readonly int VolumetricCloudTexture = Shader.PropertyToID("_VolumetricCloudTexture");
+        public static readonly int VolumetricCloudCurrentTexture = Shader.PropertyToID("_VolumetricCloudCurrentTexture");
+        public static readonly int VolumetricCloudHistoryTexture = Shader.PropertyToID("_VolumetricCloudHistoryTexture");
+        public static readonly int VolumetricCloudHistoryOutputTexture = Shader.PropertyToID("_VolumetricCloudHistoryOutputTexture");
+        public static readonly int VolumetricCloudStabilizedTexture = Shader.PropertyToID("_VolumetricCloudStabilizedTexture");
+        public static readonly int VolumetricCloudHistoryWeightTexture = Shader.PropertyToID("_VolumetricCloudHistoryWeightTexture");
         public static readonly int VolumetricCloudTraceSize = Shader.PropertyToID("_VolumetricCloudTraceSize");
         public static readonly int CloudViewBasisRight = Shader.PropertyToID("_CloudViewBasisRight");
         public static readonly int CloudViewBasisUp = Shader.PropertyToID("_CloudViewBasisUp");
@@ -25,8 +30,16 @@ namespace VolumetricClouds.Runtime
         public static readonly int CloudHasDetailShapeNoise = Shader.PropertyToID("_CloudHasDetailShapeNoise");
         public static readonly int CloudShapeScaleData = Shader.PropertyToID("_CloudShapeScaleData");
         public static readonly int CloudWindData = Shader.PropertyToID("_CloudWindData");
+        public static readonly int CloudJitterData = Shader.PropertyToID("_CloudJitterData");
+        public static readonly int CloudEnableJitter = Shader.PropertyToID("_CloudEnableJitter");
         public static readonly int CloudDebugMode = Shader.PropertyToID("_CloudDebugMode");
         public static readonly int CloudSceneDepthTexture = Shader.PropertyToID("_CloudSceneDepthTexture");
         public static readonly int CloudScreenSize = Shader.PropertyToID("_CloudScreenSize");
+        public static readonly int CloudTemporalData = Shader.PropertyToID("_CloudTemporalData");
+        public static readonly int CloudPreviousCameraPositionKm = Shader.PropertyToID("_CloudPreviousCameraPositionKm");
+        public static readonly int CloudPreviousViewBasisRight = Shader.PropertyToID("_CloudPreviousViewBasisRight");
+        public static readonly int CloudPreviousViewBasisUp = Shader.PropertyToID("_CloudPreviousViewBasisUp");
+        public static readonly int CloudPreviousViewBasisForward = Shader.PropertyToID("_CloudPreviousViewBasisForward");
+        public static readonly int CloudPreviousCameraData = Shader.PropertyToID("_CloudPreviousCameraData");
     }
 }

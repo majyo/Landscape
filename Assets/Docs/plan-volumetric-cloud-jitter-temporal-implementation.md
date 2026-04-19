@@ -75,10 +75,10 @@
 | 里程碑 | 名称 | 目标 | 预计输出 | 状态 |
 | --- | --- | --- | --- | --- |
 | T0 | 基线确认 | 明确当前 trace、资源和 pass 接入点 | 依赖清单、实现边界 | `已完成` |
-| T1 | Jitter 输入骨架 | 在 raymarch 端引入稳定可控的抖动采样 | 每帧 jitter 序列与参数链 | `未开始` |
-| T2 | History 资源骨架 | 搭建 history RT 生命周期与双缓冲切换 | 当前帧/历史帧 RT 管理 | `未开始` |
-| T3 | Temporal Accumulation 闭环 | 跑通 reprojection + 累积混合 | 更稳定的云 trace | `未开始` |
-| T4 | Reject 与调试 | 补齐失效判定、重置策略和 overlay | 可追查的时域调试结果 | `未开始` |
+| T1 | Jitter 输入骨架 | 在 raymarch 端引入稳定可控的抖动采样 | 每帧 jitter 序列与参数链 | `已完成` |
+| T2 | History 资源骨架 | 搭建 history RT 生命周期与双缓冲切换 | 当前帧/历史帧 RT 管理 | `待验证` |
+| T3 | Temporal Accumulation 闭环 | 跑通 reprojection + 累积混合 | 更稳定的云 trace | `待验证` |
+| T4 | Reject 与调试 | 补齐失效判定、重置策略和 overlay | 可追查的时域调试结果 | `待验证` |
 | T5 | 验收与默认参数收口 | 固化默认参数并完成回归 | 稳定可回归的时域云版本 | `未开始` |
 
 ## 6. 设计到实现追踪矩阵
@@ -219,12 +219,12 @@ Assets/
 
 ### 实施任务
 
-- [ ] 在 `VolumetricCloudParameters` 中新增 temporal 相关字段
-- [ ] 增加 frame index / jitter index / jitter offset
-- [ ] 在 `VolumetricCloudController` 或 pass 层维护稳定递增的 jitter 序列
-- [ ] 首版使用固定 Halton(2,3) 或等价低差异序列
-- [ ] 在 `VolumetricCloudRaymarch.compute` 中将 jitter 作用于 ray 起点或步进偏移
-- [ ] 保持无 history 时也能独立运行和观察 jitter 结果
+- [x] 在 `VolumetricCloudParameters` 中新增 temporal 相关字段
+- [x] 增加 frame index / jitter index / jitter offset
+- [x] 在 `VolumetricCloudController` 或 pass 层维护稳定递增的 jitter 序列
+- [x] 首版使用固定 Halton(2,3) 或等价低差异序列
+- [x] 在 `VolumetricCloudRaymarch.compute` 中将 jitter 作用于 ray 起点或步进偏移
+- [x] 保持无 history 时也能独立运行和观察 jitter 结果
 
 ### 默认决策
 
@@ -252,11 +252,11 @@ Assets/
 
 | 项 | 内容 |
 | --- | --- |
-| 状态 | `未开始` |
+| 状态 | `已完成` |
 | 负责人 | Codex |
-| 开始日期 | 待填写 |
-| 完成日期 | 待填写 |
-| 备注 | 待填写 |
+| 开始日期 | 2026-04-19 |
+| 完成日期 | 2026-04-19 |
+| 备注 | 已完成 jitter 参数链、Halton(2,3) 序列推进、步进偏移采样接入和默认 profile 字段写入；视觉检查未发现明显问题，`dotnet build Assembly-CSharp.csproj` 通过。 |
 
 ## Step 2. History 资源骨架
 
@@ -266,12 +266,12 @@ Assets/
 
 ### 实施任务
 
-- [ ] 扩展 `VolumetricCloudResources`，新增 history RT 双缓冲
-- [ ] 明确 current trace / history trace / output trace 的命名和 ownership
-- [ ] 增加 history 有效性状态位
-- [ ] 缓存前一帧相机位置、方向、FOV、aspect、trace size
-- [ ] 在分辨率变化、相机切换、PlayMode 重进时重置 history
-- [ ] 在 profile 关键参数突变时允许主动丢弃 history
+- [x] 扩展 `VolumetricCloudResources`，新增 history RT 双缓冲
+- [x] 明确 current trace / history trace / output trace 的命名和 ownership
+- [x] 增加 history 有效性状态位
+- [x] 缓存前一帧相机位置、方向、FOV、aspect、trace size
+- [x] 在分辨率变化、相机切换、PlayMode 重进时重置 history
+- [x] 在 profile 关键参数突变时允许主动丢弃 history
 
 ### 默认决策
 
@@ -300,11 +300,11 @@ Assets/
 
 | 项 | 内容 |
 | --- | --- |
-| 状态 | `未开始` |
+| 状态 | `待验证` |
 | 负责人 | Codex |
-| 开始日期 | 待填写 |
+| 开始日期 | 2026-04-19 |
 | 完成日期 | 待填写 |
-| 备注 | 待填写 |
+| 备注 | 已完成 history RT 双缓冲、`HistoryValid` 状态、`VolumetricCloudTemporalState` 相机快照缓存、`HistoryResetHash` 和 reset 接线；Step 2 不改变 composite 输出，`dotnet build Assembly-CSharp.csproj` 通过，PlayMode/尺寸变化验证待执行。 |
 
 ## Step 3. Temporal Accumulation 闭环
 
@@ -314,14 +314,14 @@ Assets/
 
 ### 实施任务
 
-- [ ] 新建 `VolumetricCloudTemporalAccumulation.compute`
-- [ ] 读取 current trace
-- [ ] 读取 history trace
-- [ ] 使用当前/前一帧相机参数做 reprojection
-- [ ] 将 reprojection 结果采样到 history UV
-- [ ] 对 `scattering` 与 `transmittance` 分别混合
-- [ ] 输出新的 stabilized trace
-- [ ] 在帧尾交换 history buffer
+- [x] 新建 `VolumetricCloudTemporalAccumulation.compute`
+- [x] 读取 current trace
+- [x] 读取 history trace
+- [x] 使用当前/前一帧相机参数做 reprojection
+- [x] 将 reprojection 结果采样到 history UV
+- [x] 对 `scattering` 与 `transmittance` 分别混合
+- [x] 输出新的 stabilized trace
+- [x] 在帧尾交换 history buffer
 
 ### 推荐首版混合策略
 
@@ -357,11 +357,11 @@ transmittanceOut = lerp(currentTransmittance, historyTransmittance, historyWeigh
 
 | 项 | 内容 |
 | --- | --- |
-| 状态 | `未开始` |
+| 状态 | `待验证` |
 | 负责人 | Codex |
-| 开始日期 | 待填写 |
+| 开始日期 | 2026-04-19 |
 | 完成日期 | 待填写 |
-| 备注 | 待填写 |
+| 备注 | 已完成 `VolumetricCloudTemporalAccumulationPass` 与 compute shader，当前 trace / history read / stabilized trace / history write 闭环已接入；默认 `enableTemporalAccumulation = true`、`temporalResponse = 0.9`，`dotnet build Assembly-CSharp.csproj` 通过，视觉收敛与拖影验证待执行。 |
 
 ## Step 4. Reject、重置与调试可视化
 
@@ -371,11 +371,11 @@ transmittanceOut = lerp(currentTransmittance, historyTransmittance, historyWeigh
 
 ### 实施任务
 
-- [ ] 加入 history validity / reset 标志
-- [ ] 当相机跳变、FOV 变化、trace 尺寸变化时丢弃 history
-- [ ] 增加基于深度、云层高度或透射差异的最小 reject 条件
-- [ ] 为 overlay 增加 temporal 调试模式
-- [ ] 至少支持观察 `Current / History / Accumulated / HistoryWeight`
+- [x] 加入 history validity / reset 标志
+- [x] 当相机跳变、FOV 变化、trace 尺寸变化时丢弃 history
+- [x] 增加基于深度、云层高度或透射差异的最小 reject 条件
+- [x] 为 overlay 增加 temporal 调试模式
+- [x] 至少支持观察 `Current / History / Accumulated / HistoryWeight`
 
 ### 默认决策
 
@@ -402,11 +402,11 @@ transmittanceOut = lerp(currentTransmittance, historyTransmittance, historyWeigh
 
 | 项 | 内容 |
 | --- | --- |
-| 状态 | `未开始` |
+| 状态 | `待验证` |
 | 负责人 | Codex |
-| 开始日期 | 待填写 |
+| 开始日期 | 2026-04-19 |
 | 完成日期 | 待填写 |
-| 备注 | 待填写 |
+| 备注 | 已补充相机位置跳变、视角变化、FOV/aspect 变化 reset reason；temporal compute 基于 transmittance 差异 reject history，并输出 `HistoryWeight` 调试 RT；overlay 可观察 Current / History / Accumulated / HistoryWeight，`dotnet build Assembly-CSharp.csproj` 通过，运行画面验证待执行。 |
 
 ## Step 5. 验收与默认参数收口
 
@@ -536,10 +536,13 @@ transmittanceOut = lerp(currentTransmittance, historyTransmittance, historyWeigh
 
 ## 14. 当前进度摘要
 
-截至 2026-04-18：
+截至 2026-04-19：
 
 - 文档已创建
 - `Step 0 基线确认与接入前检查` 已完成
-- 当前状态：`T0 已完成，Step 1 未开始`
+- `Step 1 Jitter 输入骨架` 已完成
+- `Step 2 History 资源骨架` 已完成代码接入，当前状态为 `待验证`
+- `Step 3 Temporal Accumulation 闭环` 已完成代码接入，当前状态为 `待验证`
+- `Step 4 Reject、重置与调试可视化` 已完成代码接入，当前状态为 `待验证`
 - 已确认现有云链满足接入 jitter 与 temporal accumulation 的前提，且 temporal pass 应插入在 `VolumetricCloudRenderPass` 与 `VolumetricCloudCompositePass` 之间
-- 下一步建议直接进入 `Step 1 Jitter 输入骨架`
+- 下一步建议在 `SampleScene` 中完成 Step 2/Step 3/Step 4 资源生命周期、静止收敛、慢速运动拖影、快速转头 reset 和 overlay 调试验证，通过后进入 `Step 5 验收与默认参数收口`

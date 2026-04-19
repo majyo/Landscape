@@ -10,13 +10,17 @@ namespace VolumetricClouds.Runtime
     {
         private enum DebugOverlayMode
         {
-            Scattering = 0,
-            Transmittance = 1,
-            Opacity = 2
+            Current = 0,
+            CurrentTransmittance = 1,
+            CurrentOpacity = 2,
+            History = 3,
+            Accumulated = 4,
+            HistoryWeight = 5
         }
 
         private const string DefaultProfilePath = "VolumetricClouds/VolumetricCloudProfile_Default";
         private const string RaymarchComputeShaderPath = "VolumetricClouds/VolumetricCloudRaymarch";
+        private const string TemporalAccumulationComputeShaderPath = "VolumetricClouds/VolumetricCloudTemporalAccumulation";
         private const string CompositeShaderResourceName = "Hidden/Landscape/VolumetricCloudComposite";
         private const string KernelName = "CSMain";
         private const float OverlayPaddingLeft = 8.0f;
@@ -31,13 +35,17 @@ namespace VolumetricClouds.Runtime
         [SerializeField] private VolumetricCloudProfile profile;
         [SerializeField] private bool showDebugOverlay = true;
         [SerializeField] private Vector2 debugOverlaySize = new Vector2(384.0f, 216.0f);
-        [SerializeField] private DebugOverlayMode debugOverlayMode = DebugOverlayMode.Scattering;
+        [SerializeField] private DebugOverlayMode debugOverlayMode = DebugOverlayMode.Current;
 
         private VolumetricCloudResources resources;
         private ComputeShader raymarchComputeShader;
+        private ComputeShader temporalAccumulationComputeShader;
         private int raymarchKernelIndex = -1;
+        private int temporalAccumulationKernelIndex = -1;
         private int lastParameterHash = int.MinValue;
         private int lastResourceHash = int.MinValue;
+        private VolumetricCloudJitterState jitterState = VolumetricCloudJitterState.Legacy;
+        private readonly VolumetricCloudTemporalState temporalState = new VolumetricCloudTemporalState();
         private bool loggedMissingAtmosphere;
         private bool loggedMissingProfile;
         private bool loggedMissingBaseNoise;
@@ -51,6 +59,12 @@ namespace VolumetricClouds.Runtime
         public VolumetricCloudResources Resources => resources;
         public RenderTexture TraceTexture => resources != null ? resources.TraceTexture : null;
         public RTHandle TraceHandle => resources != null ? resources.TraceHandle : null;
+        public RTHandle StabilizedHandle => resources != null ? resources.StabilizedHandle : null;
+        public RTHandle HistoryReadHandle => resources != null ? resources.HistoryReadHandle : null;
+        public RTHandle HistoryWriteHandle => resources != null ? resources.HistoryWriteHandle : null;
+        public RTHandle HistoryWeightHandle => resources != null ? resources.HistoryWeightHandle : null;
+        public RTHandle CompositeHandle => resources != null ? resources.CompositeHandle : null;
+        public VolumetricCloudTemporalState TemporalState => temporalState;
         public int LastParameterHash => lastParameterHash;
         public int LastResourceHash => lastResourceHash;
 
@@ -80,6 +94,7 @@ namespace VolumetricClouds.Runtime
                 instance = null;
 
             resources?.Release();
+            temporalState.Reset();
         }
 
         private void OnValidate()
@@ -87,9 +102,10 @@ namespace VolumetricClouds.Runtime
             LoadDefaultProfileIfNeeded();
         }
 
-        public bool TryPrepare(Camera camera, out VolumetricCloudParameters parameters)
+        public bool TryPrepare(Camera camera, bool advanceJitter, out VolumetricCloudParameters parameters, out bool resourcesRecreated)
         {
             parameters = default;
+            resourcesRecreated = false;
 
             if (!enabled)
                 return false;
@@ -127,16 +143,36 @@ namespace VolumetricClouds.Runtime
                 return false;
 
             resources ??= new VolumetricCloudResources();
-            parameters = VolumetricCloudParameters.FromRuntime(profile, atmosphereParameters, viewParameters, camera, Time.time);
+            if (advanceJitter)
+                AdvanceJitterState();
+            else if (profile != null && !profile.enableJitter)
+                jitterState = VolumetricCloudJitterState.Legacy;
+
+            parameters = VolumetricCloudParameters.FromRuntime(profile, atmosphereParameters, viewParameters, camera, Time.time, jitterState);
             if (!parameters.EnableClouds)
                 return false;
 
-            if (!resources.EnsureTraceTarget(parameters))
+            if (!resources.EnsureTraceTarget(parameters, out resourcesRecreated))
                 return false;
 
             lastParameterHash = parameters.ParameterHash;
             lastResourceHash = parameters.ResourceHash;
             return true;
+        }
+
+        public VolumetricCloudTemporalState.HistoryResetReason BeginTemporalFrame(Camera camera, in VolumetricCloudParameters parameters, bool resourcesRecreated)
+        {
+            EntityId cameraInstanceId = camera != null ? camera.GetEntityId() : default;
+            VolumetricCloudTemporalState.HistoryResetReason resetReason = temporalState.BeginFrame(cameraInstanceId, parameters, resourcesRecreated);
+            if (resetReason != VolumetricCloudTemporalState.HistoryResetReason.None)
+                resources?.InvalidateHistory();
+
+            return resetReason;
+        }
+
+        public void CommitTemporalFrame()
+        {
+            temporalState.CommitFrame();
         }
 
         public void BindGlobals(CommandBuffer cmd, in VolumetricCloudParameters parameters)
@@ -155,6 +191,78 @@ namespace VolumetricClouds.Runtime
             computeShader = raymarchComputeShader;
             kernelIndex = raymarchKernelIndex;
             return computeShader != null && kernelIndex >= 0;
+        }
+
+        public bool TryGetTemporalAccumulationComputeShader(out ComputeShader computeShader, out int kernelIndex)
+        {
+            computeShader = null;
+            kernelIndex = -1;
+
+            if (!EnsureTemporalAccumulationComputeShader())
+                return false;
+
+            computeShader = temporalAccumulationComputeShader;
+            kernelIndex = temporalAccumulationKernelIndex;
+            return computeShader != null && kernelIndex >= 0;
+        }
+
+        public void SkipTemporalAccumulation()
+        {
+            resources?.UseCurrentTraceForComposite();
+            resources?.InvalidateHistory();
+        }
+
+        public void CompleteTemporalAccumulation()
+        {
+            if (resources == null)
+                return;
+
+            resources.SwapHistoryBuffers();
+            resources.MarkHistoryValid();
+        }
+
+        private void AdvanceJitterState()
+        {
+            if (profile == null || !profile.enableJitter)
+            {
+                jitterState = VolumetricCloudJitterState.Legacy;
+                return;
+            }
+
+            int frameIndex = jitterState.FrameIndex + 1;
+            int sequenceLength = Mathf.Max(1, profile.jitterSequenceLength);
+            int jitterIndex = PositiveModulo(frameIndex, sequenceLength);
+            Vector2 jitterOffset = new Vector2(
+                Halton(jitterIndex + 1, 2),
+                Halton(jitterIndex + 1, 3));
+            jitterState = new VolumetricCloudJitterState(frameIndex, jitterIndex, jitterOffset);
+        }
+
+        private static int PositiveModulo(int value, int modulus)
+        {
+            if (modulus <= 0)
+                return 0;
+
+            int result = value % modulus;
+            return result < 0 ? result + modulus : result;
+        }
+
+        private static float Halton(int index, int radix)
+        {
+            if (index <= 0 || radix <= 1)
+                return 0.5f;
+
+            float result = 0.0f;
+            float fraction = 1.0f / radix;
+            int current = index;
+            while (current > 0)
+            {
+                result += fraction * (current % radix);
+                current /= radix;
+                fraction /= radix;
+            }
+
+            return result;
         }
 
         private void LoadDefaultProfileIfNeeded()
@@ -189,9 +297,28 @@ namespace VolumetricClouds.Runtime
             return false;
         }
 
+        private bool EnsureTemporalAccumulationComputeShader()
+        {
+            if (!SystemInfo.supportsComputeShaders)
+                return false;
+
+            if (temporalAccumulationComputeShader == null)
+            {
+                temporalAccumulationComputeShader = UnityEngine.Resources.Load<ComputeShader>(TemporalAccumulationComputeShaderPath);
+                if (temporalAccumulationComputeShader != null)
+                    temporalAccumulationKernelIndex = temporalAccumulationComputeShader.FindKernel(KernelName);
+            }
+
+            return temporalAccumulationComputeShader != null && temporalAccumulationKernelIndex >= 0;
+        }
+
         private void OnGUI()
         {
-            if (!showDebugOverlay || TraceTexture == null)
+            if (!showDebugOverlay || resources == null)
+                return;
+
+            RenderTexture overlayTexture = GetOverlayTexture();
+            if (overlayTexture == null)
                 return;
 
             EnsureOverlayStyles();
@@ -207,40 +334,57 @@ namespace VolumetricClouds.Runtime
             Rect textureRect = new Rect(titleRect.x, titleRect.yMax, width, height);
             Rect metadataRect = new Rect(textureRect.x, textureRect.yMax + OverlayMetadataSpacing, textureRect.width, OverlayMetadataHeight);
 
-            GUI.Label(titleRect, $"Volumetric Cloud Lighting Trace ({GetOverlayModeLabel()})", overlayTitleStyle);
-            DrawOverlayTexture(textureRect);
-            GUI.Label(metadataRect, $"{TraceTexture.width}x{TraceTexture.height} ARGBHalf", overlayLabelStyle);
+            GUI.Label(titleRect, $"Volumetric Cloud Temporal Debug ({GetOverlayModeLabel()})", overlayTitleStyle);
+            DrawOverlayTexture(textureRect, overlayTexture);
+            GUI.Label(
+                metadataRect,
+                $"{overlayTexture.width}x{overlayTexture.height} {overlayTexture.format} | HistoryValid={resources.HistoryValid} | Reset={temporalState.LastResetReason}",
+                overlayLabelStyle);
         }
 
         private string GetOverlayModeLabel()
         {
             return debugOverlayMode switch
             {
-                DebugOverlayMode.Transmittance => "Transmittance",
-                DebugOverlayMode.Opacity => "Opacity",
-                _ => "Scattering",
+                DebugOverlayMode.History => "History",
+                DebugOverlayMode.Accumulated => "Accumulated",
+                DebugOverlayMode.HistoryWeight => "HistoryWeight",
+                DebugOverlayMode.CurrentTransmittance => "Current Transmittance",
+                DebugOverlayMode.CurrentOpacity => "Current Opacity",
+                _ => "Current",
             };
         }
 
-        private void DrawOverlayTexture(Rect textureRect)
+        private RenderTexture GetOverlayTexture()
         {
-            if (debugOverlayMode == DebugOverlayMode.Scattering)
+            return debugOverlayMode switch
             {
-                GUI.DrawTexture(textureRect, TraceTexture, ScaleMode.StretchToFill, false);
+                DebugOverlayMode.History => resources.HistoryReadTexture,
+                DebugOverlayMode.Accumulated => resources.StabilizedTexture,
+                DebugOverlayMode.HistoryWeight => resources.HistoryWeightTexture,
+                _ => resources.TraceTexture,
+            };
+        }
+
+        private void DrawOverlayTexture(Rect textureRect, RenderTexture sourceTexture)
+        {
+            if (debugOverlayMode != DebugOverlayMode.CurrentTransmittance && debugOverlayMode != DebugOverlayMode.CurrentOpacity)
+            {
+                GUI.DrawTexture(textureRect, sourceTexture, ScaleMode.StretchToFill, false);
                 return;
             }
 
             RenderTexture active = RenderTexture.active;
-            Texture2D temp = new Texture2D(TraceTexture.width, TraceTexture.height, TextureFormat.RGBAHalf, false, true);
-            RenderTexture.active = TraceTexture;
-            temp.ReadPixels(new Rect(0, 0, TraceTexture.width, TraceTexture.height), 0, 0, false);
+            Texture2D temp = new Texture2D(sourceTexture.width, sourceTexture.height, TextureFormat.RGBAHalf, false, true);
+            RenderTexture.active = sourceTexture;
+            temp.ReadPixels(new Rect(0, 0, sourceTexture.width, sourceTexture.height), 0, 0, false);
             temp.Apply(false, false);
             RenderTexture.active = active;
 
             Color[] pixels = temp.GetPixels();
             for (int i = 0; i < pixels.Length; i++)
             {
-                float value = debugOverlayMode == DebugOverlayMode.Transmittance ? pixels[i].a : 1.0f - pixels[i].a;
+                float value = debugOverlayMode == DebugOverlayMode.CurrentTransmittance ? pixels[i].a : 1.0f - pixels[i].a;
                 pixels[i] = new Color(value, value, value, 1.0f);
             }
 

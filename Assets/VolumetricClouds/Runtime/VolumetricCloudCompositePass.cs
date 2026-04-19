@@ -29,10 +29,10 @@ namespace VolumetricClouds.Rendering
                 return;
 
             VolumetricCloudController controller = VolumetricCloudController.Instance;
-            if (controller == null || !controller.TryPrepare(cameraData.camera, out VolumetricCloudParameters parameters))
+            if (controller == null || !controller.TryPrepare(cameraData.camera, false, out VolumetricCloudParameters parameters, out _))
                 return;
 
-            if (controller.TraceHandle == null)
+            if (controller.CompositeHandle == null)
                 return;
 
             UniversalResourceData resourceData = frameData.Get<UniversalResourceData>();
@@ -40,7 +40,7 @@ namespace VolumetricClouds.Rendering
             if (!source.IsValid())
                 return;
 
-            TextureHandle trace = renderGraph.ImportTexture(controller.TraceHandle);
+            TextureHandle trace = renderGraph.ImportTexture(controller.CompositeHandle);
 
             RenderTextureDescriptor descriptor = cameraData.cameraTargetDescriptor;
             descriptor.msaaSamples = 1;
@@ -72,6 +72,7 @@ namespace VolumetricClouds.Rendering
             }
 
             renderGraph.AddBlitPass(temp, source, Vector2.one, Vector2.zero, passName: "Volumetric Cloud Composite Copy Back");
+            controller.CommitTemporalFrame();
         }
 
         public void Dispose()

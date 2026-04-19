@@ -25,6 +25,17 @@ namespace VolumetricClouds.Runtime
         [Min(0.001f)] public float maxRenderDistanceKm = 64.0f;
         [Min(1)] public int traceWidth = 960;
         [Min(1)] public int traceHeight = 540;
+        public bool enableJitter = false;
+        [Range(0.0f, 1.0f)] public float jitterStrength = 1.0f;
+        [Min(1)] public int jitterSequenceLength = 8;
+
+        [Header("Temporal")]
+        public bool enableTemporalAccumulation = true;
+        [Range(0.0f, 0.99f)] public float temporalResponse = 0.9f;
+        [Range(0.0f, 1.0f)] public float temporalTransmittanceRejectThreshold = 0.2f;
+        [Min(0.0f)] public float temporalCameraResetDistanceKm = 0.25f;
+        [Range(0.0f, 180.0f)] public float temporalCameraResetAngleDegrees = 20.0f;
+        [Min(0.0f)] public float temporalFovResetDegrees = 2.0f;
 
         [Header("Noise")]
         [Min(0.001f)] public float shapeBaseScaleKm = 32.0f;
@@ -50,6 +61,13 @@ namespace VolumetricClouds.Runtime
             maxRenderDistanceKm = Mathf.Max(0.001f, maxRenderDistanceKm);
             traceWidth = Mathf.Max(1, traceWidth);
             traceHeight = Mathf.Max(1, traceHeight);
+            jitterStrength = Mathf.Clamp01(jitterStrength);
+            jitterSequenceLength = Mathf.Max(1, jitterSequenceLength);
+            temporalResponse = Mathf.Clamp(temporalResponse, 0.0f, 0.99f);
+            temporalTransmittanceRejectThreshold = Mathf.Clamp01(temporalTransmittanceRejectThreshold);
+            temporalCameraResetDistanceKm = Mathf.Max(0.0f, temporalCameraResetDistanceKm);
+            temporalCameraResetAngleDegrees = Mathf.Clamp(temporalCameraResetAngleDegrees, 0.0f, 180.0f);
+            temporalFovResetDegrees = Mathf.Max(0.0f, temporalFovResetDegrees);
             shapeBaseScaleKm = Mathf.Max(0.001f, shapeBaseScaleKm);
             detailScaleKm = Mathf.Max(0.001f, detailScaleKm);
             windSpeedKmPerSecond = Mathf.Max(0.0f, windSpeedKmPerSecond);

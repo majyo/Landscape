@@ -496,9 +496,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   profile: {fileID: 11400000, guid: aaae4c2b9ff047248616820a02541e52, type: 2}
-  showDebugOverlay: 1
+  showDebugOverlay: 0
   debugOverlaySize: {x: 384, y: 216}
-  debugOverlayMode: 0
+  debugOverlayMode: 2
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

@@ -6,24 +6,62 @@ namespace VolumetricClouds.Runtime
     public sealed class VolumetricCloudResources
     {
         private RenderTexture traceTexture;
+        private RenderTexture stabilizedTexture;
+        private RenderTexture historyReadTexture;
+        private RenderTexture historyWriteTexture;
+        private RenderTexture historyWeightTexture;
         private RTHandle traceHandle;
+        private RTHandle stabilizedHandle;
+        private RTHandle historyReadHandle;
+        private RTHandle historyWriteHandle;
+        private RTHandle historyWeightHandle;
         private int currentResourceHash = int.MinValue;
+        private bool historyValid;
+        private bool useStabilizedForComposite;
 
         public RenderTexture TraceTexture => traceTexture;
+        public RenderTexture StabilizedTexture => stabilizedTexture;
+        public RenderTexture HistoryReadTexture => historyReadTexture;
+        public RenderTexture HistoryWriteTexture => historyWriteTexture;
+        public RenderTexture HistoryWeightTexture => historyWeightTexture;
         public RTHandle TraceHandle => traceHandle;
+        public RTHandle StabilizedHandle => stabilizedHandle;
+        public RTHandle HistoryReadHandle => historyReadHandle;
+        public RTHandle HistoryWriteHandle => historyWriteHandle;
+        public RTHandle HistoryWeightHandle => historyWeightHandle;
+        public RTHandle CompositeHandle => useStabilizedForComposite && stabilizedHandle != null ? stabilizedHandle : traceHandle;
+        public bool HistoryValid => historyValid;
 
-        public bool EnsureTraceTarget(in VolumetricCloudParameters parameters)
+        public bool EnsureTraceTarget(in VolumetricCloudParameters parameters, out bool resourcesRecreated)
         {
+            resourcesRecreated = false;
             if (traceTexture != null
+                && stabilizedTexture != null
+                && historyReadTexture != null
+                && historyWriteTexture != null
+                && historyWeightTexture != null
                 && traceHandle != null
+                && stabilizedHandle != null
+                && historyReadHandle != null
+                && historyWriteHandle != null
+                && historyWeightHandle != null
                 && currentResourceHash == parameters.ResourceHash
                 && traceTexture.width == parameters.TraceWidth
-                && traceTexture.height == parameters.TraceHeight)
+                && traceTexture.height == parameters.TraceHeight
+                && stabilizedTexture.width == parameters.TraceWidth
+                && stabilizedTexture.height == parameters.TraceHeight
+                && historyReadTexture.width == parameters.TraceWidth
+                && historyReadTexture.height == parameters.TraceHeight
+                && historyWriteTexture.width == parameters.TraceWidth
+                && historyWriteTexture.height == parameters.TraceHeight
+                && historyWeightTexture.width == parameters.TraceWidth
+                && historyWeightTexture.height == parameters.TraceHeight)
             {
                 return true;
             }
 
             Release();
+            resourcesRecreated = true;
 
             RenderTextureDescriptor descriptor = new RenderTextureDescriptor(parameters.TraceWidth, parameters.TraceHeight, RenderTextureFormat.ARGBHalf, 0)
             {
@@ -36,23 +74,61 @@ namespace VolumetricClouds.Runtime
                 sRGB = false
             };
 
-            traceTexture = new RenderTexture(descriptor)
-            {
-                name = "Volumetric Cloud Trace",
-                filterMode = FilterMode.Bilinear,
-                wrapMode = TextureWrapMode.Clamp
-            };
+            traceTexture = CreateTexture(descriptor, "Volumetric Cloud Trace");
+            stabilizedTexture = CreateTexture(descriptor, "Volumetric Cloud Stabilized Trace");
+            historyReadTexture = CreateTexture(descriptor, "Volumetric Cloud History Read");
+            historyWriteTexture = CreateTexture(descriptor, "Volumetric Cloud History Write");
+            historyWeightTexture = CreateTexture(descriptor, "Volumetric Cloud History Weight");
 
-            if (!traceTexture.Create())
+            if (traceTexture == null || stabilizedTexture == null || historyReadTexture == null || historyWriteTexture == null || historyWeightTexture == null)
             {
-                Debug.LogError("VolumetricClouds: failed to create trace render texture.");
+                Debug.LogError("VolumetricClouds: failed to create cloud render textures.");
                 Release();
                 return false;
             }
 
             traceHandle = RTHandles.Alloc(traceTexture);
+            stabilizedHandle = RTHandles.Alloc(stabilizedTexture);
+            historyReadHandle = RTHandles.Alloc(historyReadTexture);
+            historyWriteHandle = RTHandles.Alloc(historyWriteTexture);
+            historyWeightHandle = RTHandles.Alloc(historyWeightTexture);
+            if (traceHandle == null || stabilizedHandle == null || historyReadHandle == null || historyWriteHandle == null || historyWeightHandle == null)
+            {
+                Debug.LogError("VolumetricClouds: failed to allocate cloud RTHandles.");
+                Release();
+                return false;
+            }
+
             currentResourceHash = parameters.ResourceHash;
-            return traceHandle != null;
+            historyValid = false;
+            useStabilizedForComposite = false;
+            return true;
+        }
+
+        public void InvalidateHistory()
+        {
+            historyValid = false;
+        }
+
+        public void MarkHistoryValid()
+        {
+            historyValid = historyReadHandle != null && historyWriteHandle != null;
+        }
+
+        public void SwapHistoryBuffers()
+        {
+            (historyReadTexture, historyWriteTexture) = (historyWriteTexture, historyReadTexture);
+            (historyReadHandle, historyWriteHandle) = (historyWriteHandle, historyReadHandle);
+        }
+
+        public void UseCurrentTraceForComposite()
+        {
+            useStabilizedForComposite = false;
+        }
+
+        public void UseStabilizedTraceForComposite()
+        {
+            useStabilizedForComposite = stabilizedHandle != null;
         }
 
         public void BindGlobals(CommandBuffer cmd, in VolumetricCloudParameters parameters)
@@ -108,23 +184,46 @@ namespace VolumetricClouds.Runtime
 
         public void Release()
         {
-            if (traceHandle != null)
-            {
-                traceHandle.Release();
-                traceHandle = null;
-            }
-
-            if (traceTexture != null)
-            {
-                if (Application.isPlaying)
-                    Object.Destroy(traceTexture);
-                else
-                    Object.DestroyImmediate(traceTexture);
-
-                traceTexture = null;
-            }
+            ReleaseTexture(ref traceTexture, ref traceHandle);
+            ReleaseTexture(ref stabilizedTexture, ref stabilizedHandle);
+            ReleaseTexture(ref historyReadTexture, ref historyReadHandle);
+            ReleaseTexture(ref historyWriteTexture, ref historyWriteHandle);
+            ReleaseTexture(ref historyWeightTexture, ref historyWeightHandle);
 
             currentResourceHash = int.MinValue;
+            historyValid = false;
+            useStabilizedForComposite = false;
+        }
+
+        private static RenderTexture CreateTexture(RenderTextureDescriptor descriptor, string textureName)
+        {
+            RenderTexture texture = new RenderTexture(descriptor)
+            {
+                name = textureName,
+                filterMode = FilterMode.Bilinear,
+                wrapMode = TextureWrapMode.Clamp
+            };
+
+            return texture.Create() ? texture : null;
+        }
+
+        private static void ReleaseTexture(ref RenderTexture texture, ref RTHandle handle)
+        {
+            if (handle != null)
+            {
+                handle.Release();
+                handle = null;
+            }
+
+            if (texture == null)
+                return;
+
+            if (Application.isPlaying)
+                Object.Destroy(texture);
+            else
+                Object.DestroyImmediate(texture);
+
+            texture = null;
         }
     }
 }
