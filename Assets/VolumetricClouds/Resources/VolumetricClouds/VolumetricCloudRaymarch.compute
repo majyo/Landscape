@@ -7,6 +7,10 @@ Texture3D _CloudBaseShapeNoise;
 SamplerState sampler_CloudBaseShapeNoise;
 Texture3D _CloudDetailShapeNoise;
 SamplerState sampler_CloudDetailShapeNoise;
+Texture2D<float4> _CloudWeatherFieldTexture;
+SamplerState sampler_CloudWeatherFieldTexture;
+Texture2D<float4> _CloudHeightDensityLut;
+SamplerState sampler_CloudHeightDensityLut;
 Texture2D _AtmosphereTransmittanceLut;
 SamplerState sampler_AtmosphereTransmittanceLut;
 Texture2D _AtmosphereSkyViewLut;
@@ -33,6 +37,11 @@ int _CloudShadowStepCount;
 float4 _CloudShapeScaleData;
 float4 _CloudWindData;
 float4 _CloudJitterData;
+float4 _CloudWeatherFieldSize;
+float4 _CloudWeatherFieldData;
+float4 _CloudWeatherRemapData;
+float4 _CloudTypeRemapData;
+float4 _CloudDetailErosionData;
 float _AtmosphereGroundRadiusKm;
 float _AtmosphereTopRadiusKm;
 float3 _AtmosphereSunDirection;
@@ -46,6 +55,8 @@ float _AtmosphereCameraAspectRatio;
 float _AtmosphereSkyExposure;
 int _CloudHasDetailShapeNoise;
 int _CloudEnableJitter;
+int _CloudUseRuntimeWeatherField;
+int _CloudHasHeightDensityLut;
 float4 _ZBufferParams;
 
 float2 GetCloudLayerInterval(float3 cameraPositionKm, float3 rayDirection, bool insideLayer)
@@ -192,7 +203,27 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
             detailShape = _CloudDetailShapeNoise.SampleLevel(sampler_CloudDetailShapeNoise, frac(detailNoiseUv), 0).r;
         }
 
-        float density = ComputeCloudDensity(baseShape, detailShape, _CloudCoverage, _CloudDensityMultiplier, height01);
+        float density = ComputeCloudDensityFromWeatherField(
+            _CloudUseRuntimeWeatherField != 0,
+            _CloudWeatherFieldTexture,
+            sampler_CloudWeatherFieldTexture,
+            _CloudHeightDensityLut,
+            sampler_CloudHeightDensityLut,
+            _CloudHasHeightDensityLut != 0,
+            samplePositionKm,
+            height01,
+            baseShape,
+            detailShape,
+            _CloudCoverage,
+            _CloudDensityMultiplier,
+            _CloudWeatherFieldData.x,
+            _CloudWeatherFieldData.yz,
+            _CloudWeatherFieldData.w,
+            _CloudWeatherRemapData.x,
+            _CloudWeatherRemapData.y,
+            _CloudTypeRemapData.x,
+            _CloudTypeRemapData.y,
+            _CloudDetailErosionData.x);
         if (density < 1e-5)
             continue;
 
@@ -232,7 +263,21 @@ void CSMain(uint3 dispatchThreadId : SV_DispatchThreadID)
                 _CloudHasDetailShapeNoise != 0,
                 _CloudShapeScaleData.x,
                 _CloudShapeScaleData.y,
-                _CloudLightAbsorption)
+                _CloudLightAbsorption,
+                _CloudUseRuntimeWeatherField != 0,
+                _CloudWeatherFieldTexture,
+                sampler_CloudWeatherFieldTexture,
+                _CloudWeatherFieldData.x,
+                _CloudWeatherFieldData.yz,
+                _CloudWeatherFieldData.w,
+                _CloudWeatherRemapData.x,
+                _CloudWeatherRemapData.y,
+                _CloudHeightDensityLut,
+                sampler_CloudHeightDensityLut,
+                _CloudHasHeightDensityLut != 0,
+                _CloudTypeRemapData.x,
+                _CloudTypeRemapData.y,
+                _CloudDetailErosionData.x)
             : 1.0;
 
         float phase = PhaseMieCornetteShanks(dot(rayDirection, sunDirection), _CloudPhaseG);

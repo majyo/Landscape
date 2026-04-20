@@ -68,9 +68,19 @@ namespace VolumetricClouds.Rendering
             TextureHandle traceHandle = renderGraph.ImportTexture(controller.TraceHandle);
             TextureHandle transmittanceHandle = renderGraph.ImportTexture(AtmosphereController.Instance.TransmittanceHandle);
             TextureHandle skyViewHandle = renderGraph.ImportTexture(AtmosphereController.Instance.SkyViewHandle);
+            TextureHandle weatherFieldHandle = default;
+            bool hasWeatherField = parameters.EnableRuntimeWeatherField && controller.WeatherFieldHandle != null;
+            if (hasWeatherField)
+                weatherFieldHandle = renderGraph.ImportTexture(controller.WeatherFieldHandle);
 
             Shader.SetGlobalTexture(VolumetricCloudShaderIDs.CloudBaseShapeNoise, parameters.BaseShapeNoise);
             Shader.SetGlobalTexture(VolumetricCloudShaderIDs.CloudDetailShapeNoise, parameters.DetailShapeNoise);
+            Shader.SetGlobalTexture(
+                VolumetricCloudShaderIDs.CloudHeightDensityLut,
+                parameters.CloudHeightDensityLut != null ? parameters.CloudHeightDensityLut : Texture2D.whiteTexture);
+            Shader.SetGlobalTexture(
+                VolumetricCloudShaderIDs.CloudWeatherFieldTexture,
+                controller.WeatherFieldTexture != null ? controller.WeatherFieldTexture : Texture2D.whiteTexture);
 
             using (var builder = renderGraph.AddComputePass<ComputePassData>(ProfilingName, out ComputePassData passData))
             {
@@ -80,6 +90,7 @@ namespace VolumetricClouds.Rendering
                 passData.traceHandle = traceHandle;
                 passData.transmittanceHandle = transmittanceHandle;
                 passData.skyViewHandle = skyViewHandle;
+                passData.weatherFieldHandle = weatherFieldHandle;
                 passData.parameters = parameters;
                 TextureDesc depthDescriptor = depthHandle.GetDescriptor(renderGraph);
                 passData.screenWidth = Mathf.Max(1, depthDescriptor.width);
@@ -88,11 +99,24 @@ namespace VolumetricClouds.Rendering
                 builder.UseTexture(passData.depthHandle, AccessFlags.Read);
                 builder.UseTexture(passData.transmittanceHandle, AccessFlags.Read);
                 builder.UseTexture(passData.skyViewHandle, AccessFlags.Read);
+                if (passData.weatherFieldHandle.IsValid())
+                    builder.UseTexture(passData.weatherFieldHandle, AccessFlags.Read);
                 builder.UseTexture(passData.traceHandle, AccessFlags.WriteAll);
                 builder.AllowPassCulling(false);
                 builder.SetRenderFunc(static (ComputePassData data, ComputeGraphContext context) =>
                 {
-                    ApplyCloudParameters(context.cmd, data.computeShader, data.kernelIndex, data.depthHandle, data.traceHandle, data.transmittanceHandle, data.skyViewHandle, data.parameters, data.screenWidth, data.screenHeight);
+                    ApplyCloudParameters(
+                        context.cmd,
+                        data.computeShader,
+                        data.kernelIndex,
+                        data.depthHandle,
+                        data.traceHandle,
+                        data.transmittanceHandle,
+                        data.skyViewHandle,
+                        data.weatherFieldHandle,
+                        data.parameters,
+                        data.screenWidth,
+                        data.screenHeight);
                 });
             }
 
@@ -125,6 +149,7 @@ namespace VolumetricClouds.Rendering
             TextureHandle traceHandle,
             TextureHandle transmittanceHandle,
             TextureHandle skyViewHandle,
+            TextureHandle weatherFieldHandle,
             in VolumetricCloudParameters parameters,
             int screenWidth,
             int screenHeight)
@@ -174,6 +199,53 @@ namespace VolumetricClouds.Rendering
                 computeShader,
                 VolumetricCloudShaderIDs.CloudJitterData,
                 new Vector4(parameters.JitterOffset.x, parameters.JitterOffset.y, parameters.JitterStrength, 0.0f));
+            cmd.SetComputeVectorParam(
+                computeShader,
+                VolumetricCloudShaderIDs.CloudWeatherFieldSize,
+                new Vector4(
+                    parameters.WeatherFieldTexture != null ? parameters.WeatherFieldTexture.width : 1,
+                    parameters.WeatherFieldTexture != null ? parameters.WeatherFieldTexture.height : 1,
+                    parameters.WeatherFieldTexture != null ? 1.0f / Mathf.Max(1, parameters.WeatherFieldTexture.width) : 1.0f,
+                    parameters.WeatherFieldTexture != null ? 1.0f / Mathf.Max(1, parameters.WeatherFieldTexture.height) : 1.0f));
+            cmd.SetComputeVectorParam(
+                computeShader,
+                VolumetricCloudShaderIDs.CloudWeatherFieldData,
+                new Vector4(
+                    parameters.WeatherFieldScaleKm,
+                    parameters.WeatherFieldOffsetKm.x,
+                    parameters.WeatherFieldOffsetKm.y,
+                    parameters.GlobalCoverageGain));
+            cmd.SetComputeVectorParam(
+                computeShader,
+                VolumetricCloudShaderIDs.CloudWeatherRemapData,
+                new Vector4(
+                    parameters.CoverageBias,
+                    parameters.CoverageContrast,
+                    0.0f,
+                    0.0f));
+            cmd.SetComputeVectorParam(
+                computeShader,
+                VolumetricCloudShaderIDs.CloudTypeRemapData,
+                new Vector4(
+                    parameters.CloudTypeRemapMin,
+                    parameters.CloudTypeRemapMax,
+                    0.0f,
+                    0.0f));
+            cmd.SetComputeVectorParam(
+                computeShader,
+                VolumetricCloudShaderIDs.CloudDetailErosionData,
+                new Vector4(parameters.DetailErosionStrength, 0.0f, 0.0f, 0.0f));
+            cmd.SetComputeIntParam(
+                computeShader,
+                VolumetricCloudShaderIDs.CloudUseRuntimeWeatherField,
+                parameters.EnableRuntimeWeatherField && weatherFieldHandle.IsValid() ? 1 : 0);
+            cmd.SetComputeIntParam(
+                computeShader,
+                VolumetricCloudShaderIDs.CloudHasHeightDensityLut,
+                parameters.CloudHeightDensityLut != null ? 1 : 0);
+
+            if (weatherFieldHandle.IsValid())
+                cmd.SetComputeTextureParam(computeShader, kernelIndex, VolumetricCloudShaderIDs.CloudWeatherFieldTexture, weatherFieldHandle);
 
             cmd.SetComputeFloatParam(computeShader, AtmosphereShaderIDs.GroundRadiusKm, parameters.GroundRadiusKm);
             cmd.SetComputeFloatParam(computeShader, AtmosphereShaderIDs.TopRadiusKm, parameters.TopRadiusKm);
@@ -203,6 +275,7 @@ namespace VolumetricClouds.Rendering
             public TextureHandle traceHandle;
             public TextureHandle transmittanceHandle;
             public TextureHandle skyViewHandle;
+            public TextureHandle weatherFieldHandle;
             public VolumetricCloudParameters parameters;
             public int screenWidth;
             public int screenHeight;

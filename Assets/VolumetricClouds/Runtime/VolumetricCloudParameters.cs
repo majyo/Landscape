@@ -36,6 +36,18 @@ namespace VolumetricClouds.Runtime
         public readonly float WindSpeedKmPerSecond;
         public readonly Texture3D BaseShapeNoise;
         public readonly Texture3D DetailShapeNoise;
+        public readonly bool EnableRuntimeWeatherField;
+        public readonly Texture WeatherFieldTexture;
+        public readonly Texture2D CloudHeightDensityLut;
+        public readonly float WeatherFieldScaleKm;
+        public readonly Vector2 WeatherFieldOffsetKm;
+        public readonly float GlobalCoverageGain;
+        public readonly float CoverageBias;
+        public readonly float CoverageContrast;
+        public readonly float DetailErosionStrength;
+        public readonly float CloudTypeRemapMin;
+        public readonly float CloudTypeRemapMax;
+        public readonly int WeatherFieldDiscontinuityVersion;
         public readonly float GroundRadiusKm;
         public readonly float TopRadiusKm;
         public readonly Vector3 SunDirection;
@@ -89,6 +101,18 @@ namespace VolumetricClouds.Runtime
             float windSpeedKmPerSecond,
             Texture3D baseShapeNoise,
             Texture3D detailShapeNoise,
+            bool enableRuntimeWeatherField,
+            Texture weatherFieldTexture,
+            Texture2D cloudHeightDensityLut,
+            float weatherFieldScaleKm,
+            Vector2 weatherFieldOffsetKm,
+            float globalCoverageGain,
+            float coverageBias,
+            float coverageContrast,
+            float detailErosionStrength,
+            float cloudTypeRemapMin,
+            float cloudTypeRemapMax,
+            int weatherFieldDiscontinuityVersion,
             float groundRadiusKm,
             float topRadiusKm,
             Vector3 sunDirection,
@@ -138,6 +162,18 @@ namespace VolumetricClouds.Runtime
             WindSpeedKmPerSecond = windSpeedKmPerSecond;
             BaseShapeNoise = baseShapeNoise;
             DetailShapeNoise = detailShapeNoise;
+            EnableRuntimeWeatherField = enableRuntimeWeatherField;
+            WeatherFieldTexture = weatherFieldTexture;
+            CloudHeightDensityLut = cloudHeightDensityLut;
+            WeatherFieldScaleKm = weatherFieldScaleKm;
+            WeatherFieldOffsetKm = weatherFieldOffsetKm;
+            GlobalCoverageGain = globalCoverageGain;
+            CoverageBias = coverageBias;
+            CoverageContrast = coverageContrast;
+            DetailErosionStrength = detailErosionStrength;
+            CloudTypeRemapMin = cloudTypeRemapMin;
+            CloudTypeRemapMax = cloudTypeRemapMax;
+            WeatherFieldDiscontinuityVersion = weatherFieldDiscontinuityVersion;
             GroundRadiusKm = groundRadiusKm;
             TopRadiusKm = topRadiusKm;
             SunDirection = sunDirection;
@@ -178,6 +214,18 @@ namespace VolumetricClouds.Runtime
                 windSpeedKmPerSecond,
                 baseShapeNoise,
                 detailShapeNoise,
+                enableRuntimeWeatherField,
+                weatherFieldTexture,
+                cloudHeightDensityLut,
+                weatherFieldScaleKm,
+                weatherFieldOffsetKm,
+                globalCoverageGain,
+                coverageBias,
+                coverageContrast,
+                detailErosionStrength,
+                cloudTypeRemapMin,
+                cloudTypeRemapMax,
+                weatherFieldDiscontinuityVersion,
                 groundRadiusKm,
                 topRadiusKm,
                 sunDirection,
@@ -216,6 +264,18 @@ namespace VolumetricClouds.Runtime
                 windSpeedKmPerSecond,
                 baseShapeNoise,
                 detailShapeNoise,
+                enableRuntimeWeatherField,
+                weatherFieldTexture,
+                cloudHeightDensityLut,
+                weatherFieldScaleKm,
+                weatherFieldOffsetKm,
+                globalCoverageGain,
+                coverageBias,
+                coverageContrast,
+                detailErosionStrength,
+                cloudTypeRemapMin,
+                cloudTypeRemapMax,
+                weatherFieldDiscontinuityVersion,
                 groundRadiusKm,
                 topRadiusKm,
                 sunDirection,
@@ -236,21 +296,29 @@ namespace VolumetricClouds.Runtime
                 ResourceHash);
         }
 
-        public static VolumetricCloudParameters FromRuntime(
+        internal static VolumetricCloudParameters FromRuntime(
             VolumetricCloudProfile profile,
             in AtmosphereParameters atmosphereParameters,
             in AtmosphereViewParameters viewParameters,
             Camera camera,
             float timeSeconds,
-            in VolumetricCloudJitterState jitterState)
+            in VolumetricCloudJitterState jitterState,
+            in VolumetricCloudWeatherContext weatherContext)
         {
-            Vector2 normalizedWind = profile.windDirection.sqrMagnitude > 1e-6f
-                ? profile.windDirection.normalized
+            Vector2 sourceWindDirection = weatherContext.EnableRuntimeWeatherField
+                ? weatherContext.WindDirection
+                : profile.windDirection;
+            float sourceWindSpeedKmPerSecond = weatherContext.EnableRuntimeWeatherField
+                ? weatherContext.WindSpeedKmPerSecond
+                : profile.windSpeedKmPerSecond;
+
+            Vector2 normalizedWind = sourceWindDirection.sqrMagnitude > 1e-6f
+                ? sourceWindDirection.normalized
                 : new Vector2(1.0f, 0.0f);
             float cloudBottomHeightKm = Mathf.Max(0.001f, profile.cloudBottomHeightKm);
             float cloudTopHeightKm = Mathf.Max(cloudBottomHeightKm + 0.001f, profile.cloudTopHeightKm);
             float cloudThicknessKm = cloudTopHeightKm - cloudBottomHeightKm;
-            float windDistanceKm = Mathf.Max(0.0f, profile.windSpeedKmPerSecond) * Mathf.Max(0.0f, timeSeconds);
+            float windDistanceKm = Mathf.Max(0.0f, sourceWindSpeedKmPerSecond) * Mathf.Max(0.0f, timeSeconds);
             Vector2 windOffset = normalizedWind * windDistanceKm;
             Transform cameraTransform = camera.transform;
             Vector3 viewBasisRight = cameraTransform.right.normalized;
@@ -284,7 +352,7 @@ namespace VolumetricClouds.Runtime
                 jitterState.JitterIndex,
                 jitterState.JitterOffset,
                 profile.enableTemporalAccumulation,
-                Mathf.Clamp(profile.temporalResponse, 0.0f, 0.99f),
+                Mathf.Clamp(weatherContext.EffectiveTemporalResponse, 0.0f, 0.99f),
                 Mathf.Clamp01(profile.temporalTransmittanceRejectThreshold),
                 Mathf.Max(0.0f, profile.temporalCameraResetDistanceKm),
                 Mathf.Clamp(profile.temporalCameraResetAngleDegrees, 0.0f, 180.0f),
@@ -292,9 +360,21 @@ namespace VolumetricClouds.Runtime
                 Mathf.Max(0.001f, profile.shapeBaseScaleKm),
                 Mathf.Max(0.001f, profile.detailScaleKm),
                 normalizedWind,
-                Mathf.Max(0.0f, profile.windSpeedKmPerSecond),
+                Mathf.Max(0.0f, sourceWindSpeedKmPerSecond),
                 profile.baseShapeNoise,
                 profile.detailShapeNoise,
+                weatherContext.EnableRuntimeWeatherField && weatherContext.WeatherFieldTexture != null,
+                weatherContext.WeatherFieldTexture,
+                weatherContext.CloudHeightDensityLut,
+                Mathf.Max(0.001f, weatherContext.WeatherFieldScaleKm),
+                weatherContext.WeatherFieldOffsetKm,
+                Mathf.Clamp01(weatherContext.GlobalCoverageGain),
+                weatherContext.CoverageBias,
+                Mathf.Max(0.0f, weatherContext.CoverageContrast),
+                Mathf.Clamp01(weatherContext.DetailErosionStrength),
+                Mathf.Clamp01(weatherContext.CloudTypeRemapMin),
+                Mathf.Clamp01(weatherContext.CloudTypeRemapMax),
+                Mathf.Max(0, weatherContext.WeatherFieldDiscontinuityVersion),
                 atmosphereParameters.GroundRadiusKm,
                 atmosphereParameters.TopRadiusKm,
                 viewParameters.SunDirection,
@@ -355,6 +435,18 @@ namespace VolumetricClouds.Runtime
             float windSpeedKmPerSecond,
             Texture3D baseShapeNoise,
             Texture3D detailShapeNoise,
+            bool enableRuntimeWeatherField,
+            Texture weatherFieldTexture,
+            Texture2D cloudHeightDensityLut,
+            float weatherFieldScaleKm,
+            Vector2 weatherFieldOffsetKm,
+            float globalCoverageGain,
+            float coverageBias,
+            float coverageContrast,
+            float detailErosionStrength,
+            float cloudTypeRemapMin,
+            float cloudTypeRemapMax,
+            int weatherFieldDiscontinuityVersion,
             float groundRadiusKm,
             float topRadiusKm,
             Vector3 sunDirection,
@@ -403,6 +495,16 @@ namespace VolumetricClouds.Runtime
                 hash = AppendFloat(hash, detailScaleKm);
                 hash = AppendVector2(hash, windDirection);
                 hash = AppendFloat(hash, windSpeedKmPerSecond);
+                hash = (hash * 31) + (enableRuntimeWeatherField ? 1 : 0);
+                hash = AppendFloat(hash, weatherFieldScaleKm);
+                hash = AppendVector2(hash, weatherFieldOffsetKm);
+                hash = AppendFloat(hash, globalCoverageGain);
+                hash = AppendFloat(hash, coverageBias);
+                hash = AppendFloat(hash, coverageContrast);
+                hash = AppendFloat(hash, detailErosionStrength);
+                hash = AppendFloat(hash, cloudTypeRemapMin);
+                hash = AppendFloat(hash, cloudTypeRemapMax);
+                hash = (hash * 31) + weatherFieldDiscontinuityVersion;
                 hash = AppendFloat(hash, groundRadiusKm);
                 hash = AppendFloat(hash, topRadiusKm);
                 hash = AppendVector3(hash, sunDirection);
@@ -423,6 +525,7 @@ namespace VolumetricClouds.Runtime
                 hash = (hash * 31) + (enableClouds ? 1 : 0);
                 hash = (hash * 31) + (baseShapeNoise != null ? baseShapeNoise.GetHashCode() : 0);
                 hash = (hash * 31) + (detailShapeNoise != null ? detailShapeNoise.GetHashCode() : 0);
+                hash = (hash * 31) + (cloudHeightDensityLut != null ? cloudHeightDensityLut.GetHashCode() : 0);
                 return hash;
             }
         }
@@ -449,6 +552,18 @@ namespace VolumetricClouds.Runtime
             float windSpeedKmPerSecond,
             Texture3D baseShapeNoise,
             Texture3D detailShapeNoise,
+            bool enableRuntimeWeatherField,
+            Texture weatherFieldTexture,
+            Texture2D cloudHeightDensityLut,
+            float weatherFieldScaleKm,
+            Vector2 weatherFieldOffsetKm,
+            float globalCoverageGain,
+            float coverageBias,
+            float coverageContrast,
+            float detailErosionStrength,
+            float cloudTypeRemapMin,
+            float cloudTypeRemapMax,
+            int weatherFieldDiscontinuityVersion,
             float groundRadiusKm,
             float topRadiusKm,
             Vector3 sunDirection,
@@ -480,8 +595,13 @@ namespace VolumetricClouds.Runtime
                 hash = AppendFloat(hash, detailScaleKm);
                 hash = AppendVector2(hash, windDirection);
                 hash = AppendFloat(hash, windSpeedKmPerSecond);
+                hash = (hash * 31) + (enableRuntimeWeatherField ? 1 : 0);
+                hash = AppendFloat(hash, weatherFieldScaleKm);
+                hash = AppendVector2(hash, weatherFieldOffsetKm);
+                hash = (hash * 31) + weatherFieldDiscontinuityVersion;
                 hash = (hash * 31) + (baseShapeNoise != null ? baseShapeNoise.GetHashCode() : 0);
                 hash = (hash * 31) + (detailShapeNoise != null ? detailShapeNoise.GetHashCode() : 0);
+                hash = (hash * 31) + (cloudHeightDensityLut != null ? cloudHeightDensityLut.GetHashCode() : 0);
                 hash = AppendFloat(hash, groundRadiusKm);
                 hash = AppendFloat(hash, topRadiusKm);
                 hash = AppendVector3(hash, sunDirection);

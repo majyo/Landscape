@@ -17,6 +17,7 @@ namespace Atmosphere.Rendering
         private AtmosphereMultiScatteringPass multiScatteringPass;
         private AtmosphereSkyViewPass skyViewPass;
         private AtmosphereAerialPerspectivePass aerialPerspectivePass;
+        private VolumetricWeatherFieldUpdatePass volumetricWeatherFieldUpdatePass;
         private VolumetricCloudRenderPass volumetricCloudRenderPass;
         private VolumetricCloudTemporalAccumulationPass volumetricCloudTemporalAccumulationPass;
         private VolumetricCloudCompositePass volumetricCloudCompositePass;
@@ -45,6 +46,11 @@ namespace Atmosphere.Rendering
             aerialPerspectivePass = new AtmosphereAerialPerspectivePass
             {
                 renderPassEvent = renderPassEvent
+            };
+
+            volumetricWeatherFieldUpdatePass = new VolumetricWeatherFieldUpdatePass
+            {
+                renderPassEvent = RenderPassEvent.BeforeRenderingTransparents
             };
 
             volumetricCloudRenderPass = new VolumetricCloudRenderPass
@@ -91,6 +97,7 @@ namespace Atmosphere.Rendering
                 || multiScatteringPass == null
                 || skyViewPass == null
                 || aerialPerspectivePass == null
+                || volumetricWeatherFieldUpdatePass == null
                 || volumetricCloudRenderPass == null
                 || volumetricCloudTemporalAccumulationPass == null
                 || volumetricCloudCompositePass == null
@@ -113,6 +120,7 @@ namespace Atmosphere.Rendering
             renderer.EnqueuePass(multiScatteringPass);
             renderer.EnqueuePass(skyViewPass);
             renderer.EnqueuePass(aerialPerspectivePass);
+            renderer.EnqueuePass(volumetricWeatherFieldUpdatePass);
             renderer.EnqueuePass(volumetricCloudRenderPass);
             renderer.EnqueuePass(volumetricCloudTemporalAccumulationPass);
             renderer.EnqueuePass(volumetricCloudCompositePass);

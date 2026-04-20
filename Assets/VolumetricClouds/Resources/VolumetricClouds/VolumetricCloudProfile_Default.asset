@@ -13,9 +13,10 @@ MonoBehaviour:
   m_Name: VolumetricCloudProfile_Default
   m_EditorClassIdentifier: 
   enableClouds: 1
+  useRuntimeWeatherField: 0
   cloudBottomHeightKm: 1.5
   cloudTopHeightKm: 4
-  cloudCoverage: 0.2
+  cloudCoverage: 0.239
   densityMultiplier: 1.2
   lightAbsorption: 1
   ambientStrength: 0.35
@@ -25,10 +26,10 @@ MonoBehaviour:
   maxRenderDistanceKm: 64
   traceWidth: 960
   traceHeight: 540
-  enableJitter: 0
+  enableJitter: 1
   jitterStrength: 1
   jitterSequenceLength: 8
-  enableTemporalAccumulation: 1
+  enableTemporalAccumulation: 0
   temporalResponse: 0.9
   temporalTransmittanceRejectThreshold: 0.2
   temporalCameraResetDistanceKm: 0.25
@@ -38,5 +39,14 @@ MonoBehaviour:
   detailScaleKm: 8
   baseShapeNoise: {fileID: 11700000, guid: bbf0656c4a139cb4696a368aa3742b91, type: 3}
   detailShapeNoise: {fileID: 11700000, guid: 4f3ff803a2ca1ee4194ee4e2a0ab43a2, type: 3}
+  defaultWeatherSeed: {fileID: 2800000, guid: c4dbe4c0cbfd4fa5b11e69b2b458f1cb, type: 3}
+  cloudHeightDensityLut: {fileID: 0}
+  defaultWeatherPreset: {fileID: 11400000, guid: b4d43784526c434b86c5fb5f1da7cf4b, type: 2}
+  weatherFieldResolution: 256
+  weatherFieldScaleKm: 256
+  weatherFieldUpdateRate: 60
+  detailErosionStrength: 0.5
+  cloudTypeRemapMin: 0
+  cloudTypeRemapMax: 1
   windDirection: {x: 1, y: 0}
   windSpeedKmPerSecond: 0.02

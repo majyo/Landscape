@@ -7,6 +7,7 @@ namespace VolumetricClouds.Runtime
     {
         [Header("General")]
         public bool enableClouds = true;
+        public bool useRuntimeWeatherField = true;
 
         [Header("Layer")]
         [Min(0.001f)] public float cloudBottomHeightKm = 1.5f;
@@ -42,6 +43,17 @@ namespace VolumetricClouds.Runtime
         [Min(0.001f)] public float detailScaleKm = 8.0f;
         public Texture3D baseShapeNoise;
         public Texture3D detailShapeNoise;
+        public Texture2D defaultWeatherSeed;
+        public Texture2D cloudHeightDensityLut;
+
+        [Header("Weather Field")]
+        public WeatherPreset defaultWeatherPreset;
+        [Min(1)] public int weatherFieldResolution = 256;
+        [Min(0.001f)] public float weatherFieldScaleKm = 256.0f;
+        [Min(0.0f)] public float weatherFieldUpdateRate = 60.0f;
+        [Range(0.0f, 1.0f)] public float detailErosionStrength = 0.35f;
+        [Range(0.0f, 1.0f)] public float cloudTypeRemapMin = 0.0f;
+        [Range(0.0f, 1.0f)] public float cloudTypeRemapMax = 1.0f;
 
         [Header("Wind")]
         public Vector2 windDirection = new Vector2(1.0f, 0.0f);
@@ -70,6 +82,14 @@ namespace VolumetricClouds.Runtime
             temporalFovResetDegrees = Mathf.Max(0.0f, temporalFovResetDegrees);
             shapeBaseScaleKm = Mathf.Max(0.001f, shapeBaseScaleKm);
             detailScaleKm = Mathf.Max(0.001f, detailScaleKm);
+            weatherFieldResolution = Mathf.Max(1, weatherFieldResolution);
+            weatherFieldScaleKm = Mathf.Max(0.001f, weatherFieldScaleKm);
+            weatherFieldUpdateRate = Mathf.Max(0.0f, weatherFieldUpdateRate);
+            detailErosionStrength = Mathf.Clamp01(detailErosionStrength);
+            cloudTypeRemapMin = Mathf.Clamp01(cloudTypeRemapMin);
+            cloudTypeRemapMax = Mathf.Clamp01(cloudTypeRemapMax);
+            if (cloudTypeRemapMax < cloudTypeRemapMin)
+                cloudTypeRemapMax = cloudTypeRemapMin;
             windSpeedKmPerSecond = Mathf.Max(0.0f, windSpeedKmPerSecond);
         }
     }
