@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: WeatherPreset_Sunny
   m_EditorClassIdentifier: 
   presetName: Sunny
-  targetCoverage: 0.05
+  targetCoverage: 0.303
   targetCloudType: 0.2
   targetWetness: 0.05
   targetDensityBias: 0.05
