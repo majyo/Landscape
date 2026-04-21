@@ -543,6 +543,9 @@ namespace VolumetricClouds.Runtime
             WeatherState state = useCurrentState && weatherStateInitialized
                 ? currentWeatherState
                 : WeatherState.FromProfile(profile);
+            float effectiveCoverage = profile != null
+                ? Mathf.Clamp01(profile.cloudCoverage)
+                : Mathf.Clamp01(state.Coverage);
 
             return new VolumetricCloudWeatherContext(
                 false,
@@ -552,7 +555,7 @@ namespace VolumetricClouds.Runtime
                 profile != null ? Mathf.Max(1, profile.weatherFieldResolution) : 256,
                 profile != null ? Mathf.Max(0.001f, profile.weatherFieldScaleKm) : 256.0f,
                 Vector2.zero,
-                state.Coverage,
+                effectiveCoverage,
                 1.0f,
                 state.CoverageBias,
                 state.CoverageContrast,

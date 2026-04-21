@@ -79,6 +79,9 @@ namespace VolumetricClouds.Rendering
                 VolumetricCloudShaderIDs.CloudHeightDensityLut,
                 parameters.CloudHeightDensityLut != null ? parameters.CloudHeightDensityLut : Texture2D.whiteTexture);
             Shader.SetGlobalTexture(
+                VolumetricCloudShaderIDs.CloudCurlNoise,
+                parameters.CurlNoise != null ? parameters.CurlNoise : Texture2D.grayTexture);
+            Shader.SetGlobalTexture(
                 VolumetricCloudShaderIDs.CloudWeatherFieldTexture,
                 controller.WeatherFieldTexture != null ? controller.WeatherFieldTexture : Texture2D.whiteTexture);
 
@@ -187,6 +190,7 @@ namespace VolumetricClouds.Rendering
             cmd.SetComputeIntParam(computeShader, VolumetricCloudShaderIDs.CloudShadowStepCount, parameters.ShadowStepCount);
             cmd.SetComputeIntParam(computeShader, VolumetricCloudShaderIDs.CloudHasDetailShapeNoise, parameters.DetailShapeNoise != null ? 1 : 0);
             cmd.SetComputeIntParam(computeShader, VolumetricCloudShaderIDs.CloudEnableJitter, parameters.EnableJitter ? 1 : 0);
+            cmd.SetComputeIntParam(computeShader, VolumetricCloudShaderIDs.CloudDebugMode, Shader.GetGlobalInt(VolumetricCloudShaderIDs.CloudDebugMode));
             cmd.SetComputeVectorParam(
                 computeShader,
                 VolumetricCloudShaderIDs.CloudShapeScaleData,
@@ -225,11 +229,27 @@ namespace VolumetricClouds.Rendering
                     0.0f));
             cmd.SetComputeVectorParam(
                 computeShader,
+                VolumetricCloudShaderIDs.CloudFallbackWeatherStateData,
+                new Vector4(
+                    parameters.FallbackCloudType,
+                    parameters.FallbackWetness,
+                    parameters.FallbackDensityBias,
+                    0.0f));
+            cmd.SetComputeVectorParam(
+                computeShader,
                 VolumetricCloudShaderIDs.CloudTypeRemapData,
                 new Vector4(
                     parameters.CloudTypeRemapMin,
                     parameters.CloudTypeRemapMax,
                     0.0f,
+                    0.0f));
+            cmd.SetComputeVectorParam(
+                computeShader,
+                VolumetricCloudShaderIDs.CloudCurlNoiseData,
+                new Vector4(
+                    parameters.CurlNoiseScaleKm,
+                    parameters.CurlNoiseStrengthKm,
+                    1.0f / Mathf.Max(parameters.CurlNoiseScaleKm, 1e-3f),
                     0.0f));
             cmd.SetComputeVectorParam(
                 computeShader,
@@ -243,6 +263,10 @@ namespace VolumetricClouds.Rendering
                 computeShader,
                 VolumetricCloudShaderIDs.CloudHasHeightDensityLut,
                 parameters.CloudHeightDensityLut != null ? 1 : 0);
+            cmd.SetComputeIntParam(
+                computeShader,
+                VolumetricCloudShaderIDs.CloudHasCurlNoise,
+                parameters.CurlNoise != null ? 1 : 0);
 
             if (weatherFieldHandle.IsValid())
                 cmd.SetComputeTextureParam(computeShader, kernelIndex, VolumetricCloudShaderIDs.CloudWeatherFieldTexture, weatherFieldHandle);

@@ -467,7 +467,7 @@ namespace Atmosphere.Runtime
                 return;
             }
 
-            Light[] lights = FindObjectsByType<Light>();
+            Light[] lights = FindObjectsByType<Light>(FindObjectsSortMode.None);
             for (int i = 0; i < lights.Length; i++)
             {
                 if (lights[i] != null && lights[i].type == LightType.Directional)

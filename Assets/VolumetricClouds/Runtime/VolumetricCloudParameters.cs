@@ -32,10 +32,13 @@ namespace VolumetricClouds.Runtime
         public readonly float TemporalFovResetDegrees;
         public readonly float ShapeBaseScaleKm;
         public readonly float DetailScaleKm;
+        public readonly float CurlNoiseScaleKm;
+        public readonly float CurlNoiseStrengthKm;
         public readonly Vector2 WindDirection;
         public readonly float WindSpeedKmPerSecond;
         public readonly Texture3D BaseShapeNoise;
         public readonly Texture3D DetailShapeNoise;
+        public readonly Texture2D CurlNoise;
         public readonly bool EnableRuntimeWeatherField;
         public readonly Texture WeatherFieldTexture;
         public readonly Texture2D CloudHeightDensityLut;
@@ -44,6 +47,9 @@ namespace VolumetricClouds.Runtime
         public readonly float GlobalCoverageGain;
         public readonly float CoverageBias;
         public readonly float CoverageContrast;
+        public readonly float FallbackCloudType;
+        public readonly float FallbackWetness;
+        public readonly float FallbackDensityBias;
         public readonly float DetailErosionStrength;
         public readonly float CloudTypeRemapMin;
         public readonly float CloudTypeRemapMax;
@@ -97,10 +103,13 @@ namespace VolumetricClouds.Runtime
             float temporalFovResetDegrees,
             float shapeBaseScaleKm,
             float detailScaleKm,
+            float curlNoiseScaleKm,
+            float curlNoiseStrengthKm,
             Vector2 windDirection,
             float windSpeedKmPerSecond,
             Texture3D baseShapeNoise,
             Texture3D detailShapeNoise,
+            Texture2D curlNoise,
             bool enableRuntimeWeatherField,
             Texture weatherFieldTexture,
             Texture2D cloudHeightDensityLut,
@@ -109,6 +118,9 @@ namespace VolumetricClouds.Runtime
             float globalCoverageGain,
             float coverageBias,
             float coverageContrast,
+            float fallbackCloudType,
+            float fallbackWetness,
+            float fallbackDensityBias,
             float detailErosionStrength,
             float cloudTypeRemapMin,
             float cloudTypeRemapMax,
@@ -158,10 +170,13 @@ namespace VolumetricClouds.Runtime
             TemporalFovResetDegrees = temporalFovResetDegrees;
             ShapeBaseScaleKm = shapeBaseScaleKm;
             DetailScaleKm = detailScaleKm;
+            CurlNoiseScaleKm = curlNoiseScaleKm;
+            CurlNoiseStrengthKm = curlNoiseStrengthKm;
             WindDirection = windDirection;
             WindSpeedKmPerSecond = windSpeedKmPerSecond;
             BaseShapeNoise = baseShapeNoise;
             DetailShapeNoise = detailShapeNoise;
+            CurlNoise = curlNoise;
             EnableRuntimeWeatherField = enableRuntimeWeatherField;
             WeatherFieldTexture = weatherFieldTexture;
             CloudHeightDensityLut = cloudHeightDensityLut;
@@ -170,6 +185,9 @@ namespace VolumetricClouds.Runtime
             GlobalCoverageGain = globalCoverageGain;
             CoverageBias = coverageBias;
             CoverageContrast = coverageContrast;
+            FallbackCloudType = fallbackCloudType;
+            FallbackWetness = fallbackWetness;
+            FallbackDensityBias = fallbackDensityBias;
             DetailErosionStrength = detailErosionStrength;
             CloudTypeRemapMin = cloudTypeRemapMin;
             CloudTypeRemapMax = cloudTypeRemapMax;
@@ -210,10 +228,13 @@ namespace VolumetricClouds.Runtime
                 enableTemporalAccumulation,
                 shapeBaseScaleKm,
                 detailScaleKm,
+                curlNoiseScaleKm,
+                curlNoiseStrengthKm,
                 windDirection,
                 windSpeedKmPerSecond,
                 baseShapeNoise,
                 detailShapeNoise,
+                curlNoise,
                 enableRuntimeWeatherField,
                 weatherFieldTexture,
                 cloudHeightDensityLut,
@@ -260,10 +281,13 @@ namespace VolumetricClouds.Runtime
                 temporalFovResetDegrees,
                 shapeBaseScaleKm,
                 detailScaleKm,
+                curlNoiseScaleKm,
+                curlNoiseStrengthKm,
                 windDirection,
                 windSpeedKmPerSecond,
                 baseShapeNoise,
                 detailShapeNoise,
+                curlNoise,
                 enableRuntimeWeatherField,
                 weatherFieldTexture,
                 cloudHeightDensityLut,
@@ -272,6 +296,9 @@ namespace VolumetricClouds.Runtime
                 globalCoverageGain,
                 coverageBias,
                 coverageContrast,
+                fallbackCloudType,
+                fallbackWetness,
+                fallbackDensityBias,
                 detailErosionStrength,
                 cloudTypeRemapMin,
                 cloudTypeRemapMax,
@@ -359,10 +386,13 @@ namespace VolumetricClouds.Runtime
                 Mathf.Max(0.0f, profile.temporalFovResetDegrees),
                 Mathf.Max(0.001f, profile.shapeBaseScaleKm),
                 Mathf.Max(0.001f, profile.detailScaleKm),
+                Mathf.Max(0.001f, profile.curlNoiseScaleKm),
+                Mathf.Clamp(profile.curlNoiseStrengthKm, 0.0f, 2.0f),
                 normalizedWind,
                 Mathf.Max(0.0f, sourceWindSpeedKmPerSecond),
                 profile.baseShapeNoise,
                 profile.detailShapeNoise,
+                profile.curlNoise,
                 weatherContext.EnableRuntimeWeatherField && weatherContext.WeatherFieldTexture != null,
                 weatherContext.WeatherFieldTexture,
                 weatherContext.CloudHeightDensityLut,
@@ -371,6 +401,9 @@ namespace VolumetricClouds.Runtime
                 Mathf.Clamp01(weatherContext.GlobalCoverageGain),
                 weatherContext.CoverageBias,
                 Mathf.Max(0.0f, weatherContext.CoverageContrast),
+                Mathf.Clamp01(weatherContext.CloudType),
+                Mathf.Clamp01(weatherContext.Wetness),
+                Mathf.Clamp01(weatherContext.DensityBias),
                 Mathf.Clamp01(weatherContext.DetailErosionStrength),
                 Mathf.Clamp01(weatherContext.CloudTypeRemapMin),
                 Mathf.Clamp01(weatherContext.CloudTypeRemapMax),
@@ -431,10 +464,13 @@ namespace VolumetricClouds.Runtime
             float temporalFovResetDegrees,
             float shapeBaseScaleKm,
             float detailScaleKm,
+            float curlNoiseScaleKm,
+            float curlNoiseStrengthKm,
             Vector2 windDirection,
             float windSpeedKmPerSecond,
             Texture3D baseShapeNoise,
             Texture3D detailShapeNoise,
+            Texture2D curlNoise,
             bool enableRuntimeWeatherField,
             Texture weatherFieldTexture,
             Texture2D cloudHeightDensityLut,
@@ -443,6 +479,9 @@ namespace VolumetricClouds.Runtime
             float globalCoverageGain,
             float coverageBias,
             float coverageContrast,
+            float fallbackCloudType,
+            float fallbackWetness,
+            float fallbackDensityBias,
             float detailErosionStrength,
             float cloudTypeRemapMin,
             float cloudTypeRemapMax,
@@ -493,6 +532,8 @@ namespace VolumetricClouds.Runtime
                 hash = AppendFloat(hash, temporalFovResetDegrees);
                 hash = AppendFloat(hash, shapeBaseScaleKm);
                 hash = AppendFloat(hash, detailScaleKm);
+                hash = AppendFloat(hash, curlNoiseScaleKm);
+                hash = AppendFloat(hash, curlNoiseStrengthKm);
                 hash = AppendVector2(hash, windDirection);
                 hash = AppendFloat(hash, windSpeedKmPerSecond);
                 hash = (hash * 31) + (enableRuntimeWeatherField ? 1 : 0);
@@ -501,6 +542,9 @@ namespace VolumetricClouds.Runtime
                 hash = AppendFloat(hash, globalCoverageGain);
                 hash = AppendFloat(hash, coverageBias);
                 hash = AppendFloat(hash, coverageContrast);
+                hash = AppendFloat(hash, fallbackCloudType);
+                hash = AppendFloat(hash, fallbackWetness);
+                hash = AppendFloat(hash, fallbackDensityBias);
                 hash = AppendFloat(hash, detailErosionStrength);
                 hash = AppendFloat(hash, cloudTypeRemapMin);
                 hash = AppendFloat(hash, cloudTypeRemapMax);
@@ -525,6 +569,7 @@ namespace VolumetricClouds.Runtime
                 hash = (hash * 31) + (enableClouds ? 1 : 0);
                 hash = (hash * 31) + (baseShapeNoise != null ? baseShapeNoise.GetHashCode() : 0);
                 hash = (hash * 31) + (detailShapeNoise != null ? detailShapeNoise.GetHashCode() : 0);
+                hash = (hash * 31) + (curlNoise != null ? curlNoise.GetHashCode() : 0);
                 hash = (hash * 31) + (cloudHeightDensityLut != null ? cloudHeightDensityLut.GetHashCode() : 0);
                 return hash;
             }
@@ -548,10 +593,13 @@ namespace VolumetricClouds.Runtime
             bool enableTemporalAccumulation,
             float shapeBaseScaleKm,
             float detailScaleKm,
+            float curlNoiseScaleKm,
+            float curlNoiseStrengthKm,
             Vector2 windDirection,
             float windSpeedKmPerSecond,
             Texture3D baseShapeNoise,
             Texture3D detailShapeNoise,
+            Texture2D curlNoise,
             bool enableRuntimeWeatherField,
             Texture weatherFieldTexture,
             Texture2D cloudHeightDensityLut,
@@ -593,6 +641,8 @@ namespace VolumetricClouds.Runtime
                 hash = (hash * 31) + (enableTemporalAccumulation ? 1 : 0);
                 hash = AppendFloat(hash, shapeBaseScaleKm);
                 hash = AppendFloat(hash, detailScaleKm);
+                hash = AppendFloat(hash, curlNoiseScaleKm);
+                hash = AppendFloat(hash, curlNoiseStrengthKm);
                 hash = AppendVector2(hash, windDirection);
                 hash = AppendFloat(hash, windSpeedKmPerSecond);
                 hash = (hash * 31) + (enableRuntimeWeatherField ? 1 : 0);
@@ -601,6 +651,7 @@ namespace VolumetricClouds.Runtime
                 hash = (hash * 31) + weatherFieldDiscontinuityVersion;
                 hash = (hash * 31) + (baseShapeNoise != null ? baseShapeNoise.GetHashCode() : 0);
                 hash = (hash * 31) + (detailShapeNoise != null ? detailShapeNoise.GetHashCode() : 0);
+                hash = (hash * 31) + (curlNoise != null ? curlNoise.GetHashCode() : 0);
                 hash = (hash * 31) + (cloudHeightDensityLut != null ? cloudHeightDensityLut.GetHashCode() : 0);
                 hash = AppendFloat(hash, groundRadiusKm);
                 hash = AppendFloat(hash, topRadiusKm);

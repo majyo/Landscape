@@ -43,6 +43,9 @@ namespace VolumetricClouds.Runtime
         [Min(0.001f)] public float detailScaleKm = 8.0f;
         public Texture3D baseShapeNoise;
         public Texture3D detailShapeNoise;
+        public Texture2D curlNoise;
+        [Min(0.001f)] public float curlNoiseScaleKm = 24.0f;
+        [Range(0.0f, 2.0f)] public float curlNoiseStrengthKm = 0.35f;
         public Texture2D defaultWeatherSeed;
         public Texture2D cloudHeightDensityLut;
 
@@ -82,6 +85,8 @@ namespace VolumetricClouds.Runtime
             temporalFovResetDegrees = Mathf.Max(0.0f, temporalFovResetDegrees);
             shapeBaseScaleKm = Mathf.Max(0.001f, shapeBaseScaleKm);
             detailScaleKm = Mathf.Max(0.001f, detailScaleKm);
+            curlNoiseScaleKm = Mathf.Max(0.001f, curlNoiseScaleKm);
+            curlNoiseStrengthKm = Mathf.Clamp(curlNoiseStrengthKm, 0.0f, 2.0f);
             weatherFieldResolution = Mathf.Max(1, weatherFieldResolution);
             weatherFieldScaleKm = Mathf.Max(0.001f, weatherFieldScaleKm);
             weatherFieldUpdateRate = Mathf.Max(0.0f, weatherFieldUpdateRate);

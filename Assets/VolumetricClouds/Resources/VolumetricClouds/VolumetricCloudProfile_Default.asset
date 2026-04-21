@@ -16,8 +16,8 @@ MonoBehaviour:
   useRuntimeWeatherField: 0
   cloudBottomHeightKm: 1.5
   cloudTopHeightKm: 4
-  cloudCoverage: 0.215
-  densityMultiplier: 1.2
+  cloudCoverage: 0.122
+  densityMultiplier: 10
   lightAbsorption: 1
   ambientStrength: 0.35
   forwardScatteringG: 0.55
@@ -36,16 +36,19 @@ MonoBehaviour:
   temporalCameraResetAngleDegrees: 20
   temporalFovResetDegrees: 2
   shapeBaseScaleKm: 32
-  detailScaleKm: 8
+  detailScaleKm: 16
   baseShapeNoise: {fileID: 11700000, guid: bbf0656c4a139cb4696a368aa3742b91, type: 3}
-  detailShapeNoise: {fileID: 11700000, guid: 4f3ff803a2ca1ee4194ee4e2a0ab43a2, type: 3}
+  detailShapeNoise: {fileID: 11700000, guid: bbf0656c4a139cb4696a368aa3742b91, type: 3}
+  curlNoise: {fileID: 2800000, guid: 5fa8f2b65c1843bd92c4c452e0c17356, type: 3}
+  curlNoiseScaleKm: 16
+  curlNoiseStrengthKm: 1
   defaultWeatherSeed: {fileID: 2800000, guid: c4dbe4c0cbfd4fa5b11e69b2b458f1cb, type: 3}
-  cloudHeightDensityLut: {fileID: 0}
+  cloudHeightDensityLut: {fileID: 2800000, guid: 1b784f70d27c49cf86004a03c0387955, type: 3}
   defaultWeatherPreset: {fileID: 11400000, guid: 15f3b25b5a65496bba2fd7213084f118, type: 2}
   weatherFieldResolution: 256
   weatherFieldScaleKm: 256
   weatherFieldUpdateRate: 60
-  detailErosionStrength: 0.5
+  detailErosionStrength: 1
   cloudTypeRemapMin: 0
   cloudTypeRemapMax: 1
   windDirection: {x: 1, y: 0}
